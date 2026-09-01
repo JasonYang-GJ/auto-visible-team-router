@@ -1,0 +1,33 @@
+# Local secrets and environment files
+.env
+.env.*
+!.env.example
+
+# Logs and temporary output
+*.log
+*.tmp
+*.bak
+tmp/
+temp/
+cache/
+.cache/
+
+# Runtime and backup state
+runtime/
+backups/
+backup/
+thread-registry.json
+thread-registry.json.*
+module-registry.json
+module-registry.json.*
+
+# Tool and editor state
+.idea/
+.vscode/
+*.user
+*.suo
+
+# Operating-system files
+.DS_Store
+Thumbs.db
+Desktop.ini

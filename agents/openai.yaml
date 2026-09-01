@@ -1,0 +1,6 @@
+interface:
+  display_name: "自动可视化团队路由器"
+  short_description: "复用现有模块与角色，防止重复开发并组建最小可见工程团队"
+  default_prompt: "使用 $auto-visible-team-router 先查现有模块和能力，再安排最小必要的可见工程团队。"
+policy:
+  allow_implicit_invocation: true
