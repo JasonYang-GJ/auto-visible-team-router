@@ -51,6 +51,19 @@ The router focuses on:
 
 > More agents are not always better.
 
+## Workflow Comparison
+
+![Ordinary Multi-Agent Workflow vs Auto Visible Team Router](./assets/router-comparison-en.png)
+
+<details>
+<summary><strong>中文对比图 / Chinese version</strong></summary>
+
+<br>
+
+![普通多智能体工作流 vs Auto Visible Team Router](./assets/router-comparison-zh.png)
+
+</details>
+
 ## The Problem
 
 Multi-agent coding is not improved simply by adding more agents.
