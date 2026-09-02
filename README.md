@@ -1,477 +1,237 @@
 # Auto Visible Team Router
 
-A context-efficient multi-agent routing Skill for Codex that coordinates
-user-visible specialist tasks, bounded context delegation, Git worktrees,
-independent QA, and reliable delivery.
-
-- **Current release:** V1.3.3
-- **Status:** Stable current generation
-- **Future work:** Workstream-oriented V2 research (experimental, not included
-  in this release)
-
-## What is this?
-
-**A multi-agent visible-task router for Codex.**
-
-It decides when a coding task should stay in one Codex task and when it actually
-benefits from a small team of user-visible specialist tasks. It is a Codex Skill
-with routing policy and PowerShell support tools, not a background orchestration
-service.
-
-## Why does it exist?
-
-Multi-agent coding can easily become wasteful and chaotic:
-
-- multiple agents reread the same repository;
-- agents repeatedly reconstruct the same project context;
-- several agents implement overlapping functionality;
-- parallel writers collide in Git;
-- QA can become coupled to implementation;
-- long-running agent teams accumulate coordination overhead.
-
-Auto Visible Team Router is designed to reduce unnecessary context duplication
-while keeping Git ownership, independent verification, and delivery boundaries
-explicit.
-
-## What makes it different?
-
-**Visible tasks + bounded context + worktree safety + independent QA.**
-
-The router focuses on:
-
-- the smallest useful team;
-- user-visible Codex specialist tasks;
-- bounded Delegation Packets;
-- progressive Read Scopes;
-- Context Deltas instead of replaying full history;
-- one active writer per scope;
-- controlled Git worktree parallelism;
-- exact-SHA QA;
-- reliable delivery reconciliation.
-
-> More agents are not always better.
-
-## Workflow Comparison
-
-![Ordinary Multi-Agent Workflow vs Auto Visible Team Router](./assets/router-comparison-en.png)
-
-<details>
-<summary><strong>中文对比图 / Chinese version</strong></summary>
-
-<br>
-
-![普通多智能体工作流 vs Auto Visible Team Router](./assets/router-comparison-zh.png)
-
-</details>
-
-## The Problem
-
-Multi-agent coding is not improved simply by adding more agents.
-
-### Duplicate context
-
-Several agents may independently scan the repository, read the architecture,
-review project history, and reconstruct the same state. That repeats work before
-any implementation begins.
-
-### Duplicate implementation
-
-When agents do not know which capability is already authoritative, they may
-reimplement behavior that already exists instead of extending its current
-owner.
-
-### Git collisions
-
-Multiple coding agents can edit the same files, module, or branch. The result
-may be merge conflicts, unclear ownership, and difficult integration.
-
-### Verification conflict
-
-When the same agent implements a change and decides whether its own work passes,
-independent verification loses value.
-
-### Agent lifecycle complexity
-
-A Codex task (Thread), a Git worktree, and a Git branch are three different
-objects. Treating them as one lifecycle can leave dirty worktrees, unknown
-branches, duplicate tasks, wrong-SHA verification, or unsafe cleanup decisions.
-
-Auto Visible Team Router does not try to maximize agent count. Its goal is to
-**use the smallest useful team**.
-
-## Features
-
-### Smallest Useful Team
-
-Tiny and low-risk work stays in the current Codex task. A specialist is added
-only when it contributes distinct implementation, verification, architecture,
-research, or security value that justifies the coordination cost.
-
-### User-visible Codex Tasks
-
-Specialists are real user-visible Codex tasks (Threads) that can retain their
-role context. A background subagent is not silently substituted for a visible
-specialist task.
-
-### Context-Efficient Delegation
-
-The Coordinator acts as the Global Context Owner. It sends one versioned,
-bounded Delegation Packet containing the task baseline, scope, direct
-dependencies, constraints, acceptance criteria, tests, and existing evidence.
-
-Specialists begin from the smallest useful Read Scope. Later repair cycles use
-Context Deltas tied to previous and new exact SHAs instead of replaying the full
-conversation and unchanged project history.
-
-### Existing Capability Check
-
-Before medium-or-larger implementation, the router performs one bounded check
-for behavior that already exists. It starts from the primary module and direct
-dependencies, then reuses that evidence instead of asking every role to repeat
-the same repository scan.
-
-### Module-aware Ownership
-
-V1.3.3 separates module responsibility from task identity. Each core module has
-a primary owner role, each write scope is explicit, and one active coding writer
-per module or overlapping path scope is the default.
-
-Module Registry support defaults to Shadow mode. Persistent Active governance
-requires project-specific authorization and exact scheduling-lease evidence.
-
-### Git / Worktree Safety
-
-The router records Thread, Worktree, and Branch identity separately. It creates
-a new worktree only when two or more coding agents truly need parallel,
-disjoint edits with a material time benefit.
-
-Read-only roles such as Architect, QA, Security, Reviewer, and Research do not
-receive a new coding worktree by default.
-
-### Worktree Budget
-
-Each project defaults to a budget of three retained Router-managed or adopted
-worktree paths. At the budget, the order is reuse, wait, then serial execution.
-Unknown or user-owned worktrees are not deleted to manufacture capacity.
-
-### Exact-SHA QA
-
-QA verifies the exact Developer commit SHA. QA does not modify Developer code
-and then pass its own repair. A failure returns to the owning Developer, who
-produces a new SHA for QA to verify.
-
-### ReadOnly Guard
-
-Architect, QA, Reviewer, Research, and Security are Policy-Enforced Read Only by
-default. `scripts/ReadOnly-Guard.ps1` compares Git state before and after an
-assignment and reports either `READ_ONLY_CONFIRMED` or
-`READ_ONLY_STATE_CHANGED`.
-
-### Delivery Reliability
-
-V1.3.3 separates work completion from result delivery. A compact Delivery
-Receipt is reconciled with the specialist result before Coordinator ACK. A
-missing result permits one controlled `REDELIVER` of the existing summary; it
-does not rerun the work, tests, build, network access, or Provider calls.
-
-This is **Skill-layer reliability**. Codex does not currently expose an
-app-owned atomic Receipt/ACK transaction, and this project does not claim
-platform-level exactly-once delivery.
-
-### Safe Git Cleanup
-
-Cleanup is eligible only when Router ownership, clean state, final SHA, exact-SHA
-QA, and integration containment or durable retention are all proven. Unknown,
-adopted, user-owned, protected, dirty, or unmerged Git objects are never
-auto-deleted.
-
-## Architecture
-
-```mermaid
-flowchart TD
-    A[User Task] --> B[Coordinator]
-    B --> C{Routing Decision}
-
-    C -->|Simple| D[Current Codex Task]
-    C -->|Team useful| E[Smallest Useful Team]
-
-    E --> F[Developer / Specialist]
-    E --> G[Architect if required]
-    E --> H[QA if required]
-    E --> I[Security if required]
-
-    F --> J[Exact Commit SHA]
-    J --> H
-
-    H --> K[Integration]
-    K --> L[Regression]
-    L --> M[Delivery Reconciliation]
-```
-
-Roles are selected from evidence. The diagram shows possible gates, not a fixed
-team for every task.
-
-## Context Efficiency
-
-The Coordinator is the Global Context Owner for the current routing decision:
+Workstream-based engineering routing for Codex.
+
+- **Version:** 2.0.0
+- **Default mode after installation:** SHADOW
+- **Canonical Skill name:** `auto-visible-team-router`
+
+V2 routes work by observable deliverables, dependencies, write ownership,
+parallel benefit, and evidence-triggered risk gates. It replaces V1.3.3's
+long-lived project-role Thread model while retaining exact-SHA verification,
+bounded context, one writer per scope, Worktree safety, and non-destructive Git
+rules.
+
+V2 is platform-adaptive: it decides the logical Workstream route first, then
+selects an execution backend. A logical parallel route may safely run as a
+serialized fallback when the platform cannot prove isolated parallel coding.
+
+## What changes in V2
 
 ```text
-Coordinator
-    |
-    v
-Bounded Delegation Packet
-    |
-    v
-Specialist at Scope 1 + assigned evidence
+Requirement
+  -> deliverables
+  -> dependency graph
+  -> single-owner test
+  -> parallel benefit gate
+  -> LOCAL / SERIAL_1 / PARALLEL_2 / PARALLEL_3 / PLAN_FIRST
+  -> CURRENT_THREAD / COLLAB_SUBAGENT / MANUAL_VISIBLE_WORKTREE
+     / AUTO_VISIBLE_WORKTREE
+  -> integration when needed
+  -> evidence-triggered QA / Security / Architect / Reviewer gates
 ```
 
-Developer and QA normally begin at Scope 1 with assigned files, direct
-dependencies, relevant interfaces, exact SHA/diff evidence, and targeted tests.
-They do not default to a repository-wide scan.
-
-When evidence is insufficient, the scope widens progressively:
+The primary unit is a short-lived **Workstream**:
 
 ```text
-Scope 1 -> Scope 2 -> Scope 3 -> Scope 4
-           only when concrete evidence requires it
+project + batch + workstream
 ```
 
-Developer-to-QA repair loops use a Context Delta with the previous SHA, new SHA,
-changed files, new findings, and unchanged constraints.
+A capability such as Fullstack, QA, Security, or Architect is metadata or a
+gate. It is not a permanent employee identity and does not create a visible
+task by itself.
 
-**This project does not promise a fixed token-saving percentage.** Context
-efficiency depends on task structure, model behavior, repository size, tool
-usage, the number of specialists, and the amount of independent verification.
+## Project identity
 
-## Git Safety
+V2 does not require `thread.projectId` for local repository work. It resolves
+the first available stable identity:
 
-**Thread != Worktree != Branch.**
+1. `id:<projectId>`;
+2. `git:<canonical-git-root>` with an exact HEAD;
+3. `path:<canonical-path>` for an unambiguous non-Git local folder.
 
-| Object | Meaning |
-| --- | --- |
-| Thread | A user-visible Codex task with retained conversation and role context. |
-| Worktree | A physical isolated checkout that shares the repository's Git metadata. |
-| Branch | A Git reference naming a commit history. |
+Git remotes are optional. Windows path keys are absolute, trailing-separator
+normalized, and case-normalized for the filesystem contract. Display titles
+and old permanent role names are never identity sources.
 
-Parallel coding follows this gate:
+## Defaults
 
-```text
-parallel coding writers
-        |
-        v
-disjoint ownership and paths
-        |
-        v
-separate worktree only when necessary
+- Prefer `LOCAL` or `SERIAL_1`.
+- Prefer `CURRENT_THREAD`; parallel execution is an optimization, not a
+  correctness prerequisite.
+- Every extra Agent must own a distinct, independently checkable deliverable.
+- Multi-file or cross-layer work alone does not create Agents or QA.
+- Maximum simultaneous coding Workstreams is 3; larger batches run in waves.
+- One active writer owns each file or overlapping path scope.
+- New Worktrees are for genuine parallel coding, not visual team structure.
+- The Router-managed Worktree Budget defaults to 3.
+- Telemetry defaults off.
+- Token or credit savings are reported only from authoritative measurements;
+  otherwise usage is `Unknown`.
+
+## Execution backends
+
+- `CURRENT_THREAD` is the default for LOCAL, SERIAL_1, and safe serialized
+  fallback of logical PARALLEL_2/PARALLEL_3.
+- `COLLAB_SUBAGENT` exists on the current tool surface, but collaboration
+  Agents share one working tree and have no explicit cwd/Worktree parameter.
+  Parallel coding is therefore forbidden; bounded read-only analysis may be
+  used when independently valuable.
+- `MANUAL_VISIBLE_WORKTREE` is optional and user-assisted. The Router returns
+  `READY_FOR_MANUAL_VISIBLE_DISPATCH` and adopts only a real Thread whose
+  Project identity and repository containment pass.
+- `AUTO_VISIBLE_WORKTREE` is frozen as `UNSUPPORTED` with reason
+  `THREAD_CREATION_PLATFORM_LIMITATION`. Production routing must not call it.
+
+When a logical parallel route lacks a safe backend, V2 returns
+`SERIALIZED_FALLBACK` or `SERIALIZED_WAVES` rather than blocking an ordinary
+Feature. See `references/execution-backends.md` and
+`references/platform-capability-history.md`.
+
+## Modes
+
+### SHADOW
+
+The safe installation default. V2 may propose a bounded route, but it cannot
+dispatch specialist Threads, edit product code, create Worktrees or Branches,
+integrate changes, or write V2 runtime telemetry.
+
+### CANARY
+
+Enabled only for one exact `project_key + batch_id`. Every other project and
+batch behaves as SHADOW. V1 and V2 must not both route the Canary.
+
+### ACTIVE
+
+Production V2 routing after offline validation, SHADOW installation,
+platform-adapted synthetic validation, and promotion checks pass.
+
+Ambiguous or conflicting router state fails closed with
+`DUAL_ROUTER_BLOCKED`.
+
+## Risk gates
+
+Independent QA remains required for risks such as cancellation/concurrency,
+credentials/auth/permissions, migration, critical persistence, release
+candidates, high-impact defects, important shared contracts, repeated repair,
+or multi-lane integration.
+
+Security is required for credentials, trust boundaries, sensitive data,
+permissions, encryption, or code-execution boundaries. QA and Security remain
+read-only and cannot repair code and then pass their own repair.
+
+## In-place upgrade from V1.3.3
+
+This repository's management command intentionally performs an in-place
+V1.3.3-to-V2 upgrade. It does not silently create a second production router.
+
+Before installation:
+
+1. record the clean V1 repository SHA and confirm it exists on the remote;
+2. run the offline gate on the V2 branch;
+3. identify the real installed Skill path and Codex home;
+4. verify there is exactly one managed V1 AGENTS block.
+
+Example:
+
+```powershell
+.\tests\Run-OfflineGate.ps1 -Root $PWD
+
+.\scripts\Manage-Global.ps1 `
+  -Action InstallShadow `
+  -SourceRoot $PWD `
+  -CodexHome 'C:\path\to\.codex' `
+  -SkillRoot 'C:\path\to\skills\auto-visible-team-router'
 ```
 
-Architect, QA, Security, Reviewer, and Research are read-only roles by default
-and do not justify a new coding worktree on their own. Git also permits a named
-branch to be checked out in only one worktree at a time.
+`InstallShadow`:
 
-## Usage Examples
+- verifies and backs up the installed V1 Skill, AGENTS file, and runtime state;
+- hashes the backup;
+- archives V1 Thread/Module Registry state without converting it;
+- installs V2 under the same canonical Skill identity;
+- initializes a fresh Workstream Registry;
+- replaces the V1 AGENTS block with exactly one V2 SHADOW block.
 
-Actual routing depends on task evidence, risk, existing capabilities, and the
-available Codex tools. These examples are illustrative, not fixed role recipes.
+For an already-installed V2, use `UpdateV2Shadow` only from a clean export of
+an exact Release Candidate SHA. It backs up the current V2 Skill, AGENTS block,
+runtime state, and Registry; installs the allowlisted package; records the
+source identity; initializes a fresh V2 Registry; and returns the runtime to
+SHADOW before any ACTIVE promotion.
 
-### Example 1 - Tiny edit
+```powershell
+.\tests\Run-ReleaseCandidateGate.ps1 -Root $PWD -ExpectedSha '<exact-sha>'
 
-**User:** `Fix this typo.`
-
-**Result:** Current task only. No team, no worktree, and no independent QA unless
-the real risk requires it.
-
-### Example 2 - Normal feature
-
-**User:** `Add a settings option and persist it.`
-
-**Possible route:** One Developer performs a bounded capability check, implements
-the change, and runs targeted verification. Independent QA is added only if the
-risk justifies it.
-
-### Example 3 - Parallel feature
-
-**User:** `Implement an independent backend API and frontend page.`
-
-**Possible route:** Frontend, Backend, and QA, but only when write ownership is
-actually disjoint and parallel work has material value. Otherwise the work is
-serialized.
-
-### Example 4 - QA failure
-
-```text
-Developer SHA A
-    |
-    v
-QA FAIL
-    |
-    v
-Developer repair
-    |
-    v
-Developer SHA B
-    |
-    v
-QA verifies SHA B
+.\scripts\Manage-Global.ps1 `
+  -Action UpdateV2Shadow `
+  -SourceRoot 'C:\clean\candidate-export' `
+  -SourceIdentity '<exact-sha>' `
+  -CodexHome 'C:\path\to\.codex' `
+  -SkillRoot 'C:\path\to\skills\auto-visible-team-router'
 ```
 
-QA does not repair SHA A and pass itself.
-
-### Example 5 - Security-sensitive change
-
-A credential, permission, or authentication change may route to Developer, QA,
-and Security. The additional roles are selected only when their independent
-evidence is necessary.
-
-## Installation
-
-V1.3.3 includes a Windows PowerShell management script. Codex loads user-level
-Skills from `$HOME/.agents/skills`; see the official OpenAI documentation for
-[creating and loading Skills](https://learn.chatgpt.com/docs/build-skills).
-
-### 1. Inspect the downloaded source
-
-Open PowerShell in the repository root, then run:
+Use `Status` to inspect the installed path, mode, router block counts,
+Registry presence, and legacy archives.
 
 ```powershell
 .\scripts\Manage-Global.ps1 -Action Status
 ```
 
-### 2. Install the user-level Skill
+Promotion to CANARY or ACTIVE requires `-ConfirmSingleRouter`. Start a fresh
+Codex task after global routing instructions change; an already-open task may
+retain its earlier instruction chain.
 
-```powershell
-$routerSource = (Resolve-Path .).Path
-.\scripts\Manage-Global.ps1 -Action Install -SourceRoot $routerSource
-```
+## Offline validation
 
-`Install` creates a recoverable backup, copies the Skill to
-`$HOME/.agents/skills/auto-visible-team-router`, and enables one managed block in
-`$CODEX_HOME/AGENTS.md`. Existing Thread and Module Registry files are retained.
+`tests/Run-OfflineGate.ps1` runs:
 
-### 3. Verify status
+- PowerShell parser validation;
+- PowerShell and Python static validators;
+- JSON Schema instance validation;
+- Project Identity priority and ambiguity fixtures;
+- Repository/Worktree containment fixtures for primary, related, Codex-managed,
+  unrelated, dirty, detached, lineage, and canonical ProjectKey behavior;
+- route and backend-selection fixtures, including serialized fallback and
+  four-deliverable wave scheduling;
+- isolated Workstream Registry lifecycle tests;
+- isolated install/AGENTS/backup/legacy-archive tests;
+- failed-install rollback tests;
+- ReadOnly Guard tests;
+- `git diff --check`.
 
-```powershell
-$routerManager = Join-Path $HOME '.agents\skills\auto-visible-team-router\scripts\Manage-Global.ps1'
-& $routerManager -Action Status
-```
-
-### Management commands
-
-Run lifecycle actions from the installed Skill copy:
-
-```powershell
-$routerManager = Join-Path $HOME '.agents\skills\auto-visible-team-router\scripts\Manage-Global.ps1'
-
-& $routerManager -Action Disable
-& $routerManager -Action Enable
-& $routerManager -Action Uninstall -ConfirmUninstall
-```
-
-- `Disable` removes only the managed AGENTS block and retains Skill files and
-  both Registries.
-- `Enable` restores exactly one current managed block.
-- `Uninstall` requires `-ConfirmUninstall`, removes only the exact installed
-  Skill directory and managed block, and retains both Registries.
-
-Codex builds its AGENTS instruction chain per task/session. After an install or
-policy change, start a new task or restart/reload Codex before relying on the
-new instructions.
-
-### Package validation
-
-```powershell
-.\scripts\Validate-V1.ps1 -SkillRoot (Resolve-Path .).Path -Mode Package
-```
-
-The repository also contains automated behavior tests and a temporary Git
-lifecycle test. Automated evidence does not replace real Codex App evidence
-when a release claim depends on visible tasks or real project state.
-
-## Repository Structure
+Offline success is reported only as:
 
 ```text
-auto-visible-team-router/
-|-- agents/
-|   `-- openai.yaml
-|-- references/
-|   |-- acceptance-tests.md
-|   |-- context-delegation.md
-|   |-- delivery-reliability.md
-|   |-- migration-integration.md
-|   |-- module-governance.md
-|   |-- role-catalog.md
-|   |-- routing-policy.md
-|   |-- thread-lifecycle.md
-|   `-- visible-thread-delivery-recovery.md
-|-- scripts/
-|   |-- Manage-Global.ps1
-|   |-- Module-Registry.ps1
-|   |-- ReadOnly-Guard.ps1
-|   |-- Registry-Lock.ps1
-|   |-- Thread-Registry.ps1
-|   |-- Run-Acceptance-V1.3.1.ps1
-|   |-- Run-Acceptance-V1.3.2.ps1
-|   |-- Run-Acceptance-V1.3.3.ps1
-|   `-- Validate-V1*.ps1
-|-- tests/
-|   `-- Test-*.ps1
-|-- .gitignore
-|-- README.md
-|-- SKILL.md
-`-- VERSION
+V2_OFFLINE_ENGINEERING_PASS
 ```
 
-Runtime Registry files are user state and are deliberately not part of this
-source distribution.
+The platform-adapted synthetic gate never calls automatic visible Worktree
+creation. Historical r1-r4 platform evidence is retained without being reused.
 
-## Limitations
+## Repository map
 
-1. Codex does not currently expose an app-owned atomic Receipt/ACK transaction.
-   Delivery reliability is implemented at the Skill layer.
-2. Visible specialist tasks still consume model usage. More agents are not
-   automatically cheaper.
-3. Context-efficient delegation does not guarantee a specific token-saving
-   percentage.
-4. Git worktrees isolate filesystem changes but cannot eliminate logical
-   integration conflicts.
-5. Policy-Enforced Read Only is detection and workflow control, not a hard OS
-   sandbox unless the environment itself enforces that boundary.
-6. The router does not automatically push, deploy, publish, delete unknown Git
-   objects, or change user permissions without authorization.
-7. V1.3.3 is role-oriented. Future experimental work may explore more
-   task/workstream-oriented routing.
+- `SKILL.md` — routing entry contract.
+- `references/` — modes, Workstream routing, dependencies, context, risk,
+  lifecycle, execution backends, platform capability history, Git safety,
+  delivery, migration, and Canary rules.
+- `scripts/Resolve-Route.ps1` — deterministic structured fixture helper.
+- `scripts/Resolve-ExecutionBackend.ps1` — platform-adaptive backend selector.
+- `scripts/Resolve-ProjectIdentity.ps1` — Project ID/Git/path identity resolver.
+- `scripts/Resolve-RepositoryContainment.ps1` — Thread checkout/common-dir,
+  worktree inventory, lineage, dirty-state, and ownership resolver.
+- `scripts/Manage-Global.ps1` — backup, install, mode, and AGENTS lifecycle.
+- `scripts/Workstream-Registry.ps1` — batch/workstream Registry lifecycle.
+- `scripts/ReadOnly-Guard.ps1` — exact Git-state comparison for read-only gates.
+- `schemas/` — V2 configuration, Project Identity, Repository Containment,
+  route, and Registry schemas.
+- `tests/` — offline validation and lifecycle fixtures.
 
-For Codex worktree behavior and lifecycle details, see the official OpenAI
-[Git worktrees documentation](https://learn.chatgpt.com/docs/environments/git-worktrees).
+## Boundaries
 
-## Roadmap
-
-### Experimental
-
-- workstream-oriented routing;
-- task-scoped agent lifecycles;
-- dependency-aware parallelism;
-- lower coordination overhead.
-
-These are future research directions. They are not implemented V1.3.3
-capabilities, and no V2 source is included in this release.
-
-## Philosophy
-
-> More agents are not always better.
-
-The goal of Auto Visible Team Router is not to maximize parallelism. It is to
-use the smallest team that materially improves correctness, independence,
-delivery, or wall-clock time.
+The Router does not push, deploy, publish, spend money, use real credentials,
+weaken security, delete unknown Git objects, promise a fixed Token-saving
+percentage, or auto-enable itself globally.
 
 ## License
 
-Auto Visible Team Router is available under the [MIT License](LICENSE).
-
-Copyright (c) 2026 JasonYang-GJ
-
-## Status
-
-- **Current release:** V1.3.3
-- **Status:** Stable current generation
-- **Future work:** Workstream-oriented V2 research
+MIT. See [LICENSE](LICENSE).

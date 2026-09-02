@@ -1,0 +1,189 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "V2 Workstream Registry",
+  "type": "object",
+  "required": [
+    "schemaVersion",
+    "defaults",
+    "projects"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": 1
+    },
+    "defaults": {
+      "type": "object",
+      "required": [
+        "worktreeBudget",
+        "maxCodingLanes"
+      ],
+      "properties": {
+        "worktreeBudget": {
+          "const": 3
+        },
+        "maxCodingLanes": {
+          "const": 3
+        }
+      }
+    },
+    "projects": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": [
+          "batches"
+        ],
+        "properties": {
+          "projectIdentity": {
+            "type": "object",
+            "required": ["projectKey", "source", "projectId", "canonicalGitRoot", "canonicalGitCommonDir"],
+            "properties": {
+              "projectKey": { "type": "string", "pattern": "^(id|git|path):.+" },
+              "source": { "type": ["string", "null"], "enum": ["APP_PROJECT_ID", "GIT_ROOT", "CANONICAL_PATH", null] },
+              "projectId": { "type": ["string", "null"] },
+              "canonicalGitRoot": { "type": ["string", "null"] },
+              "canonicalGitCommonDir": { "type": ["string", "null"] }
+            }
+          },
+          "batches": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "object",
+              "required": [
+                "batchId",
+                "objective",
+                "state",
+                "workstreams"
+              ],
+              "properties": {
+                "batchId": {
+                  "type": "string"
+                },
+                "objective": {
+                  "type": "string"
+                },
+                "state": {
+                  "enum": [
+                    "PROPOSED",
+                    "ACTIVE",
+                    "INTEGRATING",
+                    "PASS",
+                    "FAIL",
+                    "BLOCKED",
+                    "CLOSED"
+                  ]
+                },
+                "workstreams": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": "object",
+                    "required": [
+                      "workstreamId",
+                      "state"
+                    ],
+                    "properties": {
+                      "workstreamId": {
+                        "type": "string"
+                      },
+                      "capability": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "threadId": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "threadIdentity": {
+                        "type": "object",
+                        "required": ["threadId"],
+                        "properties": {
+                          "threadId": { "type": ["string", "null"] }
+                        }
+                      },
+                      "state": {
+                        "type": "string"
+                      },
+                      "commitSha": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "worktree": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "branch": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
+                      "checkoutIdentity": {
+                        "type": "object",
+                        "required": ["checkoutPath", "checkoutType", "gitCommonDir", "startingSha", "containmentCategory", "containmentStatus"],
+                        "properties": {
+                          "checkoutPath": { "type": ["string", "null"] },
+                          "checkoutType": {
+                            "type": ["string", "null"],
+                            "enum": ["PRIMARY_CHECKOUT", "CODEX_MANAGED_WORKTREE", "PERMANENT_WORKTREE", "UNRELATED_CHECKOUT", "UNKNOWN", null]
+                          },
+                          "gitCommonDir": { "type": ["string", "null"] },
+                          "startingSha": { "type": ["string", "null"], "pattern": "^[0-9a-fA-F]{40,64}$" },
+                          "containmentCategory": {
+                            "enum": ["PRIMARY_CHECKOUT", "RELATED_GIT_WORKTREE", "UNRELATED_CHECKOUT", "UNKNOWN"]
+                          },
+                          "containmentStatus": { "enum": ["PASS", "BLOCKED", "UNKNOWN"] }
+                        }
+                      },
+                      "worktreeIdentity": {
+                        "type": "object",
+                        "required": ["management", "createdByRouter", "routerCreationEvidence"],
+                        "properties": {
+                          "management": { "enum": ["PRIMARY", "CODEX_MANAGED", "ROUTER_MANAGED", "EXTERNAL", "UNKNOWN"] },
+                          "createdByRouter": { "type": "boolean" },
+                          "routerCreationEvidence": { "type": ["string", "null"] }
+                        }
+                      },
+                      "branchIdentity": {
+                        "type": "object",
+                        "required": ["branchOrDetached"],
+                        "properties": {
+                          "branchOrDetached": { "type": ["string", "null"] }
+                        }
+                      },
+                      "ownedScope": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "dependencies": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      },
+                      "delivery": {
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

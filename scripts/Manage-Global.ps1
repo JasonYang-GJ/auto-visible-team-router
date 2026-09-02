@@ -1,285 +1,640 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('Install','Status','Disable','Enable','Uninstall')]
-    [string]$Action = 'Status',
+    [Parameter(Mandatory = $true)]
+    [ValidateSet('Status', 'InstallShadow', 'UpdateV2Shadow', 'SetMode', 'EnableTelemetry', 'DisableTelemetry', 'UninstallV2')]
+    [string]$Action,
+
     [string]$SourceRoot,
-    [string]$UserProfileRoot,
+    [string]$SourceIdentity,
+    [string]$CodexHome,
+    [string]$SkillRoot,
+    [ValidateSet('SHADOW', 'CANARY', 'ACTIVE', 'DISABLED')]
+    [string]$Mode = 'SHADOW',
+    [string]$ProjectKey,
+    [string]$BatchId,
+    [switch]$ConfirmSingleRouter,
     [switch]$ConfirmUninstall
 )
 
 $ErrorActionPreference = 'Stop'
-if (-not $SourceRoot) { $SourceRoot = Split-Path -Parent $PSScriptRoot }
-$scriptSkillRoot = [System.IO.Path]::GetFullPath((Split-Path -Parent $PSScriptRoot))
-$installedSuffix = [System.IO.Path]::Combine('.agents', 'skills', 'auto-visible-team-router')
-if ($UserProfileRoot) {
-    $routerUserProfile = [System.IO.Path]::GetFullPath($UserProfileRoot)
-} elseif ($scriptSkillRoot.EndsWith($installedSuffix, [System.StringComparison]::OrdinalIgnoreCase)) {
-    $routerUserProfile = Split-Path -Parent (Split-Path -Parent (Split-Path -Parent $scriptSkillRoot))
-} else {
-    $routerUserProfile = [Environment]::GetFolderPath('UserProfile')
-}
-$routerCodexHome = if ($env:CODEX_HOME -and -not $UserProfileRoot) {
-    [System.IO.Path]::GetFullPath($env:CODEX_HOME)
-} else {
-    [System.IO.Path]::GetFullPath((Join-Path $routerUserProfile '.codex'))
-}
-$routerSkillRoot = [System.IO.Path]::GetFullPath((Join-Path $routerUserProfile '.agents\skills\auto-visible-team-router'))
-$routerAgentsPath = Join-Path $routerCodexHome 'AGENTS.md'
-$routerBackupBase = Join-Path $routerCodexHome 'backups\auto-visible-team-router'
-$routerRegistryPath = Join-Path $routerCodexHome 'auto-visible-team-router\thread-registry.json'
-$routerModuleRegistryPath = Join-Path $routerCodexHome 'auto-visible-team-router\module-registry.json'
-$beginPattern = '<!-- BEGIN auto-visible-team-router:v1(?: separatorChars=(\d+))? -->'
-$end = '<!-- END auto-visible-team-router:v1 -->'
-$routerUtf8NoBom = New-Object System.Text.UTF8Encoding($false)
 
-$managedBody = @'
-## 自动可视化团队路由器 V1.3.3
+$v1Pattern = '(?s)<!-- BEGIN auto-visible-team-router:v1 separatorChars=0 -->.*?<!-- END auto-visible-team-router:v1 -->'
+$v2Pattern = '(?s)<!-- AUTO_VISIBLE_TEAM_ROUTER_V2 START -->.*?<!-- AUTO_VISIBLE_TEAM_ROUTER_V2 END -->'
 
-- 仅对真实软件项目启用 `$auto-visible-team-router`；普通聊天和明显简单的小改动留在当前任务，并始终选择最小必要团队。
-- Level 0 是硬性快速路径：不查找/接管/创建专业任务，不建 Worktree、Lease、Packet 或 Module Registry，不做全库扫描；Level 1 默认一个实现者，QA 仅按风险加入。
-- Thread、Worktree、Git Branch 与 Module 是四种不同对象。真实文件、Git、测试和 Thread API 是事实真源；两个 Registry 只是索引。
-- 先复用：核验 Thread Registry 与真实任务，Team Adoption 接管已有角色；模块不等于任务，不得因模块数量创建同等数量的可见任务，后台 subagent 不得冒充可见角色。
-- `completed/idle` 不等于角色交付成功。先精确读取 Thread 并对账现有 Registry 中的精简 Delivery Receipt，结果一致后才 ACK；缺失时只允许一次 `REDELIVER`，不得重新开发/测试/build/联网。冲突必须 `DELIVERY_EVIDENCE_CONFLICT`；仍失败才进入原 Degraded/单次替换/安全 fallback，且保留人工可见任务交接。
-- 对现有项目的中等以上改动先做一次有界 Existing Capability Check。Module Registry 独立于 Thread Registry，默认 Shadow；Active 必须记录精确项目、时间、依据和基线，且 Active Lease 未清零时不得退回 Shadow。
-- Coordinator 只发送一个版本化 Delegation Packet；模块、影响范围、已有能力、Owner、架构门禁和写入租约并入同一 Packet。日常从 Scope 1 和直接依赖开始，禁止让多个角色重复全库扫描或重复发送完整历史。
-- 每个核心模块默认一个主要写代码角色；Lease 仅在模块、写入者、Packet 版本、Worktree、Branch、Base Commit 和允许路径完全一致时复用，跨模块路径重叠也必须阻止。租约过期不代表可自动接管。
-- 只有两个以上写代码 Agent 确需并行且范围隔离时才新建 Worktree；每项目 Budget 默认 3。优先复用既有合理 Branch/空闲 Worktree，禁止删除未知对象腾位置。
-- QA 验证准确 SHA，区分 Feature 与 Regression；失败返回原 Owner 产生新 SHA。需要架构门禁时，QA PASS 与 Architecture Consistency PASS 后才能集成。
-- Router 升级、接管或模式切换不得打断进行中的 Developer/QA；先到安全检查点并保留原 Thread、Worktree、Branch 与 Packet。Coordinator 默认是 Integration Owner，除非明确登记替代负责人。
-- 只读守卫必须在空闲的同一检出目录和准确 SHA 上运行；发现变化时报告 `READ_ONLY_STATE_CHANGED` 并关闭放行，但不能在存在并发写入者时直接归咎 QA/Architect。
-- 不自动切换模型或推理强度，不改变权限，不自动 Push、发布、部署、重构真实项目或删除 Legacy。Git 清理仍只限已证明由 Router 创建且全部门禁通过的本地临时对象。
-- 最终只报告实际复用/创建、模块与 Owner、Thread/Worktree/Branch/Commit、Scope 升级、重复扫描理由、QA/架构/回归和未验证项；不承诺未经测量的 Token 节省比例。
-'@
-
-function Get-AgentsBytes {
-    if (Test-Path -LiteralPath $routerAgentsPath) { return [System.IO.File]::ReadAllBytes($routerAgentsPath) }
-    return [byte[]]@()
+function Resolve-CodexHome {
+    param([string]$Explicit)
+    if ($Explicit) {
+        return [System.IO.Path]::GetFullPath($Explicit)
+    }
+    if ($env:CODEX_HOME) {
+        return [System.IO.Path]::GetFullPath($env:CODEX_HOME)
+    }
+    $userProfilePath = [Environment]::GetFolderPath('UserProfile')
+    return [System.IO.Path]::GetFullPath((Join-Path $userProfilePath '.codex'))
 }
 
-function Get-AgentsText {
-    $bytes = Get-AgentsBytes
-    if ($bytes.Length -eq 0) { return '' }
-    $offset = if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) { 3 } else { 0 }
-    return $routerUtf8NoBom.GetString($bytes, $offset, $bytes.Length - $offset)
+function Resolve-SkillRoot {
+    param([string]$Explicit, [string]$ResolvedCodexHome)
+    if ($Explicit) {
+        return [System.IO.Path]::GetFullPath($Explicit)
+    }
+
+    $profileRoot = Split-Path -Parent $ResolvedCodexHome
+    $agentsCandidate = Join-Path $profileRoot '.agents\skills\auto-visible-team-router'
+    $codexCandidate = Join-Path $ResolvedCodexHome 'skills\auto-visible-team-router'
+    if (Test-Path -LiteralPath $agentsCandidate) {
+        return [System.IO.Path]::GetFullPath($agentsCandidate)
+    }
+    if (Test-Path -LiteralPath $codexCandidate) {
+        return [System.IO.Path]::GetFullPath($codexCandidate)
+    }
+    return [System.IO.Path]::GetFullPath($agentsCandidate)
 }
 
-function Write-AgentsText([string]$Text) {
-    New-Item -ItemType Directory -Force -Path $routerCodexHome | Out-Null
-    $oldBytes = Get-AgentsBytes
-    $hadBom = $oldBytes.Length -ge 3 -and $oldBytes[0] -eq 0xEF -and $oldBytes[1] -eq 0xBB -and $oldBytes[2] -eq 0xBF
-    $payload = $routerUtf8NoBom.GetBytes($Text)
-    if ($hadBom) {
-        $next = New-Object byte[] ($payload.Length + 3)
-        $next[0] = 0xEF; $next[1] = 0xBB; $next[2] = 0xBF
-        [Array]::Copy($payload, 0, $next, 3, $payload.Length)
-        [System.IO.File]::WriteAllBytes($routerAgentsPath, $next)
-    } else {
-        [System.IO.File]::WriteAllBytes($routerAgentsPath, $payload)
+function Assert-ProjectKeyFormat {
+    param([string]$Value)
+    if ($Value -notmatch '^(id|git|path):.+') {
+        throw 'ProjectKey must use id:, git:, or path: identity.'
     }
 }
 
-function Get-MarkerState([string]$Text) {
-    $begins = [regex]::Matches($Text, $beginPattern)
-    $ends = [regex]::Matches($Text, [regex]::Escape($end))
-    [pscustomobject]@{ begins = $begins; ends = $ends }
-}
-
-function Get-ManagedBlock([int]$SeparatorChars, [string]$Newline) {
-    $begin = "<!-- BEGIN auto-visible-team-router:v1 separatorChars=$SeparatorChars -->"
-    return $begin + $Newline + (($managedBody.Trim()) -replace "`r?`n", $Newline) + $Newline + $end
-}
-
-function New-Backup([string]$Reason) {
-    $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
-    $backupDir = Join-Path $routerBackupBase $stamp
-    if (Test-Path -LiteralPath $backupDir) { throw "Backup already exists: $backupDir" }
-    New-Item -ItemType Directory -Path $backupDir -Force | Out-Null
-    if (Test-Path -LiteralPath $routerAgentsPath) {
-        Copy-Item -LiteralPath $routerAgentsPath -Destination (Join-Path $backupDir 'AGENTS.md')
+function ConvertTo-Hashtable {
+    param([Parameter(ValueFromPipeline = $true)]$InputObject)
+    if ($null -eq $InputObject) {
+        return $null
     }
-    if (Test-Path -LiteralPath $routerSkillRoot) {
-        Copy-Item -LiteralPath $routerSkillRoot -Destination (Join-Path $backupDir 'skill') -Recurse
-    }
-    $stateDir = Join-Path $backupDir 'state'
-    $threadRegistryHash = $null
-    $moduleRegistryHash = $null
-    if (Test-Path -LiteralPath $routerRegistryPath) {
-        New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
-        Copy-Item -LiteralPath $routerRegistryPath -Destination (Join-Path $stateDir 'thread-registry.json')
-        $threadRegistryHash = (Get-FileHash -LiteralPath $routerRegistryPath -Algorithm SHA256).Hash
-    }
-    if (Test-Path -LiteralPath $routerModuleRegistryPath) {
-        New-Item -ItemType Directory -Path $stateDir -Force | Out-Null
-        Copy-Item -LiteralPath $routerModuleRegistryPath -Destination (Join-Path $stateDir 'module-registry.json')
-        $moduleRegistryHash = (Get-FileHash -LiteralPath $routerModuleRegistryPath -Algorithm SHA256).Hash
-    }
-    $manifest = [pscustomobject]@{
-        reason = $Reason
-        created_at = (Get-Date).ToString('o')
-        agents_existed = (Test-Path -LiteralPath $routerAgentsPath)
-        skill_existed = (Test-Path -LiteralPath $routerSkillRoot)
-        skill_root = $routerSkillRoot
-        registry_path = $routerRegistryPath
-        registry_sha256 = $threadRegistryHash
-        module_registry_path = $routerModuleRegistryPath
-        module_registry_sha256 = $moduleRegistryHash
-        registry_retained = $true
-        module_registry_retained = $true
-    } | ConvertTo-Json
-    [System.IO.File]::WriteAllText((Join-Path $backupDir 'manifest.json'), $manifest + [Environment]::NewLine, $routerUtf8NoBom)
-    return $backupDir
-}
-
-function Set-ManagedBlock([bool]$Enabled) {
-    New-Item -ItemType Directory -Force -Path $routerCodexHome | Out-Null
-    $current = Get-AgentsText
-    $markers = Get-MarkerState $current
-    if ($markers.begins.Count -ne $markers.ends.Count -or $markers.begins.Count -gt 1) {
-        throw "Refusing to edit AGENTS.md with invalid managed markers: begin=$($markers.begins.Count) end=$($markers.ends.Count)"
-    }
-    $newline = if ($current.Contains("`r`n")) { "`r`n" } else { "`n" }
-    if ($Enabled) {
-        if ($markers.begins.Count -eq 1) {
-            $beginMatch = $markers.begins[0]
-            $endMatch = $markers.ends[0]
-            if ($endMatch.Index -lt $beginMatch.Index) { throw 'Managed marker order is invalid.' }
-            $separatorChars = if ($beginMatch.Groups[1].Success) { [int]$beginMatch.Groups[1].Value } else { 0 }
-            $after = $endMatch.Index + $endMatch.Length
-            $next = $current.Substring(0, $beginMatch.Index) + (Get-ManagedBlock $separatorChars $newline) + $current.Substring($after)
-            if ($next -cne $current) { Write-AgentsText $next }
-            return
+    if ($InputObject -is [System.Collections.IDictionary]) {
+        $result = [ordered]@{}
+        foreach ($key in $InputObject.Keys) {
+            $result[$key] = ConvertTo-Hashtable $InputObject[$key]
         }
-        $separator = if ([string]::IsNullOrEmpty($current) -or $current.EndsWith($newline + $newline)) {
-            ''
-        } elseif ($current.EndsWith($newline)) {
-            $newline
-        } else {
-            $newline + $newline
+        return $result
+    }
+    if ($InputObject -is [pscustomobject]) {
+        $result = [ordered]@{}
+        foreach ($property in $InputObject.PSObject.Properties) {
+            $result[$property.Name] = ConvertTo-Hashtable $property.Value
         }
-        $block = Get-ManagedBlock $separator.Length $newline
-        Write-AgentsText ($current + $separator + $block + $newline)
-        return
+        return $result
     }
-
-    if ($markers.begins.Count -eq 0) { return }
-    $beginMatch = $markers.begins[0]
-    $endMatch = $markers.ends[0]
-    if ($endMatch.Index -lt $beginMatch.Index) { throw 'Managed marker order is invalid.' }
-    $after = $endMatch.Index + $endMatch.Length
-    if ($after -lt $current.Length -and $current.Substring($after).Trim().Length -gt 0) {
-        throw 'Refusing to remove a managed block that is not the final non-whitespace content.'
+    if (($InputObject -is [System.Collections.IEnumerable]) -and -not ($InputObject -is [string])) {
+        $items = @()
+        foreach ($item in $InputObject) {
+            $items += , (ConvertTo-Hashtable $item)
+        }
+        return $items
     }
-    $separatorChars = if ($beginMatch.Groups[1].Success) { [int]$beginMatch.Groups[1].Value } else { 0 }
-    $prefixEnd = $beginMatch.Index - $separatorChars
-    if ($prefixEnd -lt 0) { throw 'Managed separator metadata is invalid.' }
-    Write-AgentsText $current.Substring(0, $prefixEnd)
+    return $InputObject
 }
 
-function Install-SkillFiles([string]$ResolvedSource) {
-    if ($ResolvedSource.Equals($routerSkillRoot, [System.StringComparison]::OrdinalIgnoreCase)) { return }
-    $parent = Split-Path -Parent $routerSkillRoot
-    New-Item -ItemType Directory -Force -Path $parent | Out-Null
-    $stage = Join-Path $parent ('auto-visible-team-router.install-' + [guid]::NewGuid().ToString('N'))
-    $previous = Join-Path $parent ('auto-visible-team-router.previous-' + [guid]::NewGuid().ToString('N'))
-    $rootPrefix = [System.IO.Path]::GetFullPath($parent).TrimEnd('\') + [System.IO.Path]::DirectorySeparatorChar
-    foreach ($candidate in @($stage, $previous, $routerSkillRoot)) {
-        if (-not [System.IO.Path]::GetFullPath($candidate).StartsWith($rootPrefix, [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "Unsafe skill target: $candidate"
+function Read-JsonFile {
+    param([string]$Path)
+    if (-not (Test-Path -LiteralPath $Path)) {
+        return $null
+    }
+    return ConvertTo-Hashtable (Get-Content -LiteralPath $Path -Raw | ConvertFrom-Json)
+}
+
+function Write-TextAtomic {
+    param([string]$Path, [string]$Value)
+    $directory = Split-Path -Parent $Path
+    if ($directory) {
+        New-Item -ItemType Directory -Force -Path $directory | Out-Null
+    }
+    $temporaryPath = "$Path.tmp"
+    [System.IO.File]::WriteAllText($temporaryPath, $Value, [System.Text.UTF8Encoding]::new($false))
+    Move-Item -Force -LiteralPath $temporaryPath -Destination $Path
+}
+
+function Write-JsonAtomic {
+    param([string]$Path, [object]$Value)
+    Write-TextAtomic -Path $Path -Value (($Value | ConvertTo-Json -Depth 30) + [Environment]::NewLine)
+}
+
+function Get-FileSha256 {
+    param([string]$Path)
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash
+}
+
+function Get-DirectoryManifest {
+    param([string]$Root)
+    $resolvedRoot = [System.IO.Path]::GetFullPath($Root)
+    $entries = @()
+    foreach ($file in Get-ChildItem -LiteralPath $resolvedRoot -File -Recurse | Sort-Object FullName) {
+        $relative = $file.FullName.Substring($resolvedRoot.Length + 1).Replace('\', '/')
+        $entries += [ordered]@{
+            path = $relative
+            bytes = $file.Length
+            sha256 = Get-FileSha256 $file.FullName
         }
     }
-    try {
-        New-Item -ItemType Directory -Path $stage | Out-Null
-        Copy-Item -Path (Join-Path $ResolvedSource '*') -Destination $stage -Recurse -Force
-        if (-not (Test-Path -LiteralPath (Join-Path $stage 'SKILL.md'))) { throw 'Staged skill is incomplete.' }
-        if (Test-Path -LiteralPath $routerSkillRoot) { Move-Item -LiteralPath $routerSkillRoot -Destination $previous }
-        try {
-            Move-Item -LiteralPath $stage -Destination $routerSkillRoot
-        } catch {
-            if ((Test-Path -LiteralPath $previous) -and -not (Test-Path -LiteralPath $routerSkillRoot)) {
-                Move-Item -LiteralPath $previous -Destination $routerSkillRoot
+    return $entries
+}
+
+function Copy-RouterSource {
+    param([string]$Source, [string]$Destination)
+    $sourceVersionPath = Join-Path $Source 'VERSION'
+    if (-not (Test-Path -LiteralPath $sourceVersionPath)) {
+        throw 'SourceRoot is missing VERSION.'
+    }
+    if ((Get-Content -LiteralPath $sourceVersionPath -Raw).Trim() -ne '2.0.0') {
+        throw 'SourceRoot VERSION must be 2.0.0.'
+    }
+
+    New-Item -ItemType Directory -Path $Destination | Out-Null
+    foreach ($fileName in @('README.md', 'SKILL.md', 'VERSION', 'V2_COMPLETE_PLAN.md')) {
+        $sourceFile = Join-Path $Source $fileName
+        if (-not (Test-Path -LiteralPath $sourceFile)) {
+            throw "SourceRoot is missing $fileName."
+        }
+        Copy-Item -LiteralPath $sourceFile -Destination (Join-Path $Destination $fileName)
+    }
+    foreach ($directoryName in @('agents', 'examples', 'references', 'schemas', 'scripts', 'templates', 'tests')) {
+        $sourceDirectory = Join-Path $Source $directoryName
+        if (-not (Test-Path -LiteralPath $sourceDirectory)) {
+            throw "SourceRoot is missing $directoryName."
+        }
+        Copy-Item -Recurse -LiteralPath $sourceDirectory -Destination (Join-Path $Destination $directoryName)
+    }
+}
+
+function Get-CanaryBlock {
+    param([string]$CanaryProjectKey, [string]$CanaryBatchId)
+    return @"
+<!-- AUTO_VISIBLE_TEAM_ROUTER_V2 START -->
+Auto Visible Team Router V2 is in CANARY mode only for:
+- project_key: $CanaryProjectKey
+- batch_id: $CanaryBatchId
+
+For that exact batch, route by bounded deliverables, dependencies, disjoint write
+ownership, parallel benefit, and evidence-triggered gates. For every other
+project or batch, behave as SHADOW: no V2 dispatch, product edits, Worktree or
+Branch creation, integration, Registry write, or telemetry write.
+Never reuse V1 permanent role Threads. Maximum default simultaneous coding
+Workstreams is 3. Fail closed with DUAL_ROUTER_BLOCKED if exclusivity is unclear.
+<!-- AUTO_VISIBLE_TEAM_ROUTER_V2 END -->
+"@
+}
+
+function Set-AgentsRouterBlock {
+    param(
+        [string]$AgentsPath,
+        [string]$TemplateRoot,
+        [string]$TargetMode,
+        [string]$CanaryProjectKey,
+        [string]$CanaryBatchId,
+        [switch]$AllowV1Replacement
+    )
+    if (-not (Test-Path -LiteralPath $AgentsPath)) {
+        Write-TextAtomic -Path $AgentsPath -Value ''
+    }
+    $content = [System.IO.File]::ReadAllText($AgentsPath)
+    $v1Matches = [regex]::Matches($content, $v1Pattern)
+    $v2Matches = [regex]::Matches($content, $v2Pattern)
+    if ($v1Matches.Count -gt 1 -or $v2Matches.Count -gt 1 -or ($v1Matches.Count + $v2Matches.Count) -gt 1) {
+        throw 'Multiple managed router blocks found; fail closed.'
+    }
+    if (-not $AllowV1Replacement -and $v1Matches.Count -gt 0) {
+        throw 'DUAL_ROUTER_BLOCKED: a V1 managed block is still active.'
+    }
+
+    $block = ''
+    switch ($TargetMode) {
+        'SHADOW' {
+            $block = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'templates\AGENTS-v2-shadow.md')).Trim()
+        }
+        'CANARY' {
+            if ([string]::IsNullOrWhiteSpace($CanaryProjectKey) -or [string]::IsNullOrWhiteSpace($CanaryBatchId)) {
+                throw 'CANARY requires ProjectKey and BatchId.'
             }
-            throw
+            $block = (Get-CanaryBlock -CanaryProjectKey $CanaryProjectKey -CanaryBatchId $CanaryBatchId).Trim()
         }
-        if (Test-Path -LiteralPath $previous) { Remove-Item -LiteralPath $previous -Recurse -Force }
-    } finally {
-        if (Test-Path -LiteralPath $stage) { Remove-Item -LiteralPath $stage -Recurse -Force }
+        'ACTIVE' {
+            $block = [System.IO.File]::ReadAllText((Join-Path $TemplateRoot 'templates\AGENTS-v2-active.md')).Trim()
+        }
+        'DISABLED' {
+            $block = ''
+        }
+        default {
+            throw "Unsupported mode: $TargetMode"
+        }
+    }
+
+    $routerMatch = if ($v1Matches.Count -eq 1) { $v1Matches[0] } elseif ($v2Matches.Count -eq 1) { $v2Matches[0] } else { $null }
+    if ($null -ne $routerMatch) {
+        $prefix = $content.Substring(0, $routerMatch.Index).TrimEnd()
+        $suffix = $content.Substring($routerMatch.Index + $routerMatch.Length).TrimStart()
+        $parts = @($prefix, $block, $suffix) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+        $newContent = ($parts -join ([Environment]::NewLine + [Environment]::NewLine)) + [Environment]::NewLine
+    }
+    elseif ($block) {
+        $newContent = $content.TrimEnd() + [Environment]::NewLine + [Environment]::NewLine + $block + [Environment]::NewLine
+    }
+    else {
+        $newContent = $content
+    }
+    Write-TextAtomic -Path $AgentsPath -Value $newContent
+
+    $verified = [System.IO.File]::ReadAllText($AgentsPath)
+    $verifiedV1 = [regex]::Matches($verified, $v1Pattern).Count
+    $verifiedV2 = [regex]::Matches($verified, $v2Pattern).Count
+    if ($TargetMode -eq 'DISABLED') {
+        if ($verifiedV1 -ne 0 -or $verifiedV2 -ne 0) {
+            throw 'Router disable verification failed.'
+        }
+    }
+    elseif ($verifiedV1 -ne 0 -or $verifiedV2 -ne 1) {
+        throw 'Router block mutual-exclusion verification failed.'
     }
 }
 
-function Get-StatusObject {
-    $text = Get-AgentsText
-    $markers = Get-MarkerState $text
-    [pscustomobject]@{
-        action = 'Status'
-        version = '1.3.3'
-        managed_rule_version = $(if ($text.Contains('自动可视化团队路由器 V1.3.3')) { '1.3.3' } elseif ($text.Contains('自动可视化团队路由器 V1.3.2')) { '1.3.2' } elseif ($text.Contains('自动可视化团队路由器 V1.3.1')) { '1.3.1' } elseif ($text.Contains('自动可视化团队路由器 V1.3.0')) { '1.3.0' } elseif ($text.Contains('自动可视化团队路由器 V1.2.0')) { '1.2.0' } elseif ($text.Contains('自动可视化团队路由器 V1.1.1')) { '1.1.1' } elseif ($text.Contains('自动可视化团队路由器 V1.1')) { '1.1' } elseif ($markers.begins.Count -eq 1) { '1.0' } else { $null })
-        codex_home = $routerCodexHome
-        skill_root = $routerSkillRoot
-        skill_installed = (Test-Path -LiteralPath (Join-Path $routerSkillRoot 'SKILL.md'))
-        agents_path = $routerAgentsPath
-        managed_rule_enabled = ($markers.begins.Count -eq 1 -and $markers.ends.Count -eq 1)
-        begin_markers = $markers.begins.Count
-        end_markers = $markers.ends.Count
-        registry_path = $routerRegistryPath
-        registry_exists = (Test-Path -LiteralPath $routerRegistryPath)
-        module_registry_path = $routerModuleRegistryPath
-        module_registry_exists = (Test-Path -LiteralPath $routerModuleRegistryPath)
+function Write-BackupManifest {
+    param([string]$BackupRoot)
+    $manifestPath = Join-Path $BackupRoot 'backup-manifest.json'
+    $entries = @(Get-DirectoryManifest $BackupRoot | Where-Object { $_.path -ne 'backup-manifest.json' })
+    $manifest = [ordered]@{
+        schemaVersion = 1
+        createdAt = (Get-Date).ToString('o')
+        root = [System.IO.Path]::GetFullPath($BackupRoot)
+        files = $entries
     }
+    Write-JsonAtomic -Path $manifestPath -Value $manifest
+
+    $loaded = Get-Content -LiteralPath $manifestPath -Raw | ConvertFrom-Json
+    foreach ($entry in $loaded.files) {
+        $path = Join-Path $BackupRoot $entry.path
+        if (-not (Test-Path -LiteralPath $path) -or (Get-FileSha256 $path) -ne $entry.sha256) {
+            throw "Backup verification failed: $($entry.path)"
+        }
+    }
+    return $manifestPath
 }
+
+$homePath = Resolve-CodexHome $CodexHome
+$resolvedSkillRoot = Resolve-SkillRoot -Explicit $SkillRoot -ResolvedCodexHome $homePath
+$runtimeRoot = Join-Path $homePath 'auto-visible-team-router'
+$statePath = Join-Path $runtimeRoot 'v2-state.json'
+$agentsPath = Join-Path $homePath 'AGENTS.md'
 
 switch ($Action) {
     'Status' {
-        Get-StatusObject | ConvertTo-Json
-    }
-    'Install' {
-        $resolvedSource = [System.IO.Path]::GetFullPath($SourceRoot)
-        if (-not (Test-Path -LiteralPath (Join-Path $resolvedSource 'SKILL.md'))) { throw "SourceRoot is not a skill: $resolvedSource" }
-        $backupDir = New-Backup 'Install'
-        Install-SkillFiles $resolvedSource
-        Set-ManagedBlock $true
-        $status = Get-StatusObject
-        $status | Add-Member -NotePropertyName action -NotePropertyValue 'Install' -Force
-        $status | Add-Member -NotePropertyName backup_dir -NotePropertyValue $backupDir
-        $status | ConvertTo-Json
-    }
-    'Disable' {
-        $backupDir = New-Backup 'Disable'
-        Set-ManagedBlock $false
+        $agentsContent = if (Test-Path -LiteralPath $agentsPath) { [System.IO.File]::ReadAllText($agentsPath) } else { '' }
         [pscustomobject]@{
-            action = 'Disable'; version = '1.3.3'; backup_dir = $backupDir
-            skill_retained = (Test-Path -LiteralPath $routerSkillRoot)
-            registry_retained = (Test-Path -LiteralPath $routerRegistryPath)
-            module_registry_retained = (Test-Path -LiteralPath $routerModuleRegistryPath)
-            managed_rule_enabled = $false
-        } | ConvertTo-Json
+            CodexHome = $homePath
+            SkillInstalled = Test-Path -LiteralPath $resolvedSkillRoot
+            SkillPath = $resolvedSkillRoot
+            InstalledVersion = if (Test-Path -LiteralPath (Join-Path $resolvedSkillRoot 'VERSION')) {
+                (Get-Content -LiteralPath (Join-Path $resolvedSkillRoot 'VERSION') -Raw).Trim()
+            }
+            else {
+                $null
+            }
+            RuntimePath = $runtimeRoot
+            V2State = Read-JsonFile $statePath
+            ActiveV1BlockCount = [regex]::Matches($agentsContent, $v1Pattern).Count
+            ActiveV2BlockCount = [regex]::Matches($agentsContent, $v2Pattern).Count
+            LegacyThreadRegistryPresent = Test-Path -LiteralPath (Join-Path $runtimeRoot 'thread-registry.json')
+            LegacyModuleRegistryPresent = Test-Path -LiteralPath (Join-Path $runtimeRoot 'module-registry.json')
+            V2WorkstreamRegistryPresent = Test-Path -LiteralPath (Join-Path $runtimeRoot 'workstream-registry.json')
+            LegacyArchives = @(Get-ChildItem -LiteralPath (Join-Path $runtimeRoot 'legacy-v1') -Directory -ErrorAction SilentlyContinue | Select-Object -ExpandProperty FullName)
+        } | ConvertTo-Json -Depth 30
+        break
     }
-    'Enable' {
-        if (-not (Test-Path -LiteralPath (Join-Path $routerSkillRoot 'SKILL.md'))) { throw 'Skill is not installed; run Install first.' }
-        $backupDir = New-Backup 'Enable'
-        Set-ManagedBlock $true
-        [pscustomobject]@{
-            action = 'Enable'; version = '1.3.3'; backup_dir = $backupDir
-            registry_retained = (Test-Path -LiteralPath $routerRegistryPath)
-            module_registry_retained = (Test-Path -LiteralPath $routerModuleRegistryPath)
-            managed_rule_enabled = $true
-        } | ConvertTo-Json
-    }
-    'Uninstall' {
-        if (-not $ConfirmUninstall) { throw 'Uninstall requires -ConfirmUninstall.' }
-        if (-not $scriptSkillRoot.Equals($routerSkillRoot, [System.StringComparison]::OrdinalIgnoreCase)) {
-            throw "Refusing uninstall outside the exact installed skill root: $routerSkillRoot"
+
+    'InstallShadow' {
+        if (-not $SourceRoot) {
+            throw 'InstallShadow requires SourceRoot.'
         }
-        $backupDir = New-Backup 'Uninstall'
-        Set-ManagedBlock $false
-        $parent = [System.IO.Path]::GetFullPath((Split-Path -Parent $routerSkillRoot)).TrimEnd('\') + [System.IO.Path]::DirectorySeparatorChar
-        if (-not $routerSkillRoot.StartsWith($parent, [System.StringComparison]::OrdinalIgnoreCase)) { throw 'Unsafe uninstall target.' }
-        if (Test-Path -LiteralPath $routerSkillRoot) { Remove-Item -LiteralPath $routerSkillRoot -Recurse -Force }
-        [pscustomobject]@{
-            action = 'Uninstall'; version = '1.3.3'; backup_dir = $backupDir
-            skill_removed = (-not (Test-Path -LiteralPath $routerSkillRoot))
-            registry_retained = (Test-Path -LiteralPath $routerRegistryPath)
-            module_registry_retained = (Test-Path -LiteralPath $routerModuleRegistryPath)
-            managed_rule_enabled = $false
-        } | ConvertTo-Json
+        $source = [System.IO.Path]::GetFullPath($SourceRoot)
+        if (-not (Test-Path -LiteralPath $resolvedSkillRoot)) {
+            throw 'Installed V1 Skill is missing; this command performs an in-place V1 upgrade only.'
+        }
+        $installedVersionPath = Join-Path $resolvedSkillRoot 'VERSION'
+        if (-not (Test-Path -LiteralPath $installedVersionPath) -or
+            (Get-Content -LiteralPath $installedVersionPath -Raw).Trim() -ne '1.3.3') {
+            throw 'Installed Skill must be V1.3.3 before InstallShadow.'
+        }
+
+        $agentsBefore = if (Test-Path -LiteralPath $agentsPath) { [System.IO.File]::ReadAllText($agentsPath) } else { '' }
+        if ([regex]::Matches($agentsBefore, $v1Pattern).Count -ne 1 -or
+            [regex]::Matches($agentsBefore, $v2Pattern).Count -ne 0) {
+            throw 'Expected exactly one V1 managed AGENTS block and no V2 block.'
+        }
+
+        New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+        $backupRoot = Join-Path $runtimeRoot "backups\v1-pre-v2-$stamp"
+        $runtimeSnapshot = Join-Path $backupRoot 'runtime-state'
+        $legacyArchive = Join-Path $runtimeRoot "legacy-v1\$stamp"
+        New-Item -ItemType Directory -Path $backupRoot | Out-Null
+        New-Item -ItemType Directory -Path $runtimeSnapshot | Out-Null
+
+        Copy-Item -Recurse -LiteralPath $resolvedSkillRoot -Destination (Join-Path $backupRoot 'installed-skill')
+        if (Test-Path -LiteralPath $agentsPath) {
+            Copy-Item -LiteralPath $agentsPath -Destination (Join-Path $backupRoot 'AGENTS.md')
+        }
+        foreach ($item in Get-ChildItem -LiteralPath $runtimeRoot -Force) {
+            if ($item.Name -in @('backups', 'legacy-v1')) {
+                continue
+            }
+            Copy-Item -Recurse -Force -LiteralPath $item.FullName -Destination (Join-Path $runtimeSnapshot $item.Name)
+        }
+        $backupManifestPath = Write-BackupManifest $backupRoot
+
+        $skillParent = Split-Path -Parent $resolvedSkillRoot
+        New-Item -ItemType Directory -Force -Path $skillParent | Out-Null
+        $stagingRoot = Join-Path $skillParent "auto-visible-team-router-v2-staging-$stamp"
+        Copy-RouterSource -Source $source -Destination $stagingRoot
+        $stagedValidation = @(& (Join-Path $stagingRoot 'scripts\Validate-Router.ps1') -Root $stagingRoot)
+        if ($stagedValidation -notcontains 'V2_OFFLINE_VALIDATION_PASS') {
+            throw "Staged V2 validation failed: $($stagedValidation -join '; ')"
+        }
+
+        $oldSkillSwap = Join-Path $skillParent "auto-visible-team-router-v1-live-$stamp"
+        try {
+            Move-Item -LiteralPath $resolvedSkillRoot -Destination $oldSkillSwap
+            Move-Item -LiteralPath $stagingRoot -Destination $resolvedSkillRoot
+            Move-Item -LiteralPath $oldSkillSwap -Destination (Join-Path $backupRoot 'installed-skill-live')
+
+            New-Item -ItemType Directory -Force -Path $legacyArchive | Out-Null
+            foreach ($name in @('thread-registry.json', 'thread-registry.json.bak', 'module-registry.json', 'module-registry.json.bak')) {
+                $legacyPath = Join-Path $runtimeRoot $name
+                if (Test-Path -LiteralPath $legacyPath) {
+                    Move-Item -LiteralPath $legacyPath -Destination (Join-Path $legacyArchive $name)
+                }
+            }
+
+            $freshRegistry = [ordered]@{
+                schemaVersion = 1
+                defaults = [ordered]@{ worktreeBudget = 3; maxCodingLanes = 3 }
+                projects = [ordered]@{}
+            }
+            Write-JsonAtomic -Path (Join-Path $runtimeRoot 'workstream-registry.json') -Value $freshRegistry
+
+            Set-AgentsRouterBlock -AgentsPath $agentsPath -TemplateRoot $resolvedSkillRoot -TargetMode 'SHADOW' -AllowV1Replacement
+            $state = [ordered]@{
+                schemaVersion = 1
+                version = '2.0.0'
+                mode = 'SHADOW'
+                telemetryEnabled = $false
+                canary = $null
+                installedAt = (Get-Date).ToString('o')
+                skillRoot = $resolvedSkillRoot
+                rollbackBackup = $backupRoot
+                backupManifest = $backupManifestPath
+                legacyArchive = $legacyArchive
+                legacyRegistryPolicy = 'ARCHIVED_NOT_MIGRATED'
+            }
+            Write-JsonAtomic -Path $statePath -Value $state
+
+            $status = & $PSCommandPath -Action Status -CodexHome $homePath -SkillRoot $resolvedSkillRoot | ConvertFrom-Json
+            if ($status.InstalledVersion -ne '2.0.0' -or
+                $status.ActiveV1BlockCount -ne 0 -or
+                $status.ActiveV2BlockCount -ne 1 -or
+                -not $status.V2WorkstreamRegistryPresent) {
+                throw 'V2 SHADOW post-install verification failed.'
+            }
+        }
+        catch {
+            $installedVersionDuringFailure = if (Test-Path -LiteralPath (Join-Path $resolvedSkillRoot 'VERSION')) {
+                (Get-Content -LiteralPath (Join-Path $resolvedSkillRoot 'VERSION') -Raw).Trim()
+            }
+            else {
+                $null
+            }
+            if ($installedVersionDuringFailure -eq '2.0.0') {
+                Remove-Item -Recurse -Force -LiteralPath $resolvedSkillRoot
+            }
+            if (-not (Test-Path -LiteralPath $resolvedSkillRoot)) {
+                if (Test-Path -LiteralPath $oldSkillSwap) {
+                    Move-Item -LiteralPath $oldSkillSwap -Destination $resolvedSkillRoot
+                }
+                elseif (Test-Path -LiteralPath (Join-Path $backupRoot 'installed-skill')) {
+                    Copy-Item -Recurse -LiteralPath (Join-Path $backupRoot 'installed-skill') -Destination $resolvedSkillRoot
+                }
+            }
+            if (Test-Path -LiteralPath (Join-Path $backupRoot 'AGENTS.md')) {
+                Copy-Item -Force -LiteralPath (Join-Path $backupRoot 'AGENTS.md') -Destination $agentsPath
+            }
+            foreach ($name in @('thread-registry.json', 'thread-registry.json.bak', 'module-registry.json', 'module-registry.json.bak', 'v2-state.json', 'workstream-registry.json')) {
+                $originalPath = Join-Path $runtimeSnapshot $name
+                $activePath = Join-Path $runtimeRoot $name
+                if (Test-Path -LiteralPath $originalPath) {
+                    Copy-Item -Force -LiteralPath $originalPath -Destination $activePath
+                }
+                elseif (Test-Path -LiteralPath $activePath) {
+                    Remove-Item -LiteralPath $activePath
+                }
+            }
+            throw
+        }
+
+        Write-Output 'V2_SHADOW_INSTALLED_IN_PLACE'
+        Write-Output "Skill=$resolvedSkillRoot"
+        Write-Output "Backup=$backupRoot"
+        Write-Output "LegacyArchive=$legacyArchive"
+        break
+    }
+
+    'UpdateV2Shadow' {
+        if (-not $SourceRoot) {
+            throw 'UpdateV2Shadow requires SourceRoot.'
+        }
+        if ([string]::IsNullOrWhiteSpace($SourceIdentity) -or $SourceIdentity -notmatch '^[0-9a-fA-F]{40,64}$') {
+            throw 'UpdateV2Shadow requires an exact SourceIdentity Git object ID.'
+        }
+        $source = [System.IO.Path]::GetFullPath($SourceRoot)
+        $state = Read-JsonFile $statePath
+        if ($null -eq $state -or $state['version'] -ne '2.0.0') {
+            throw 'Installed V2 runtime state is missing or invalid.'
+        }
+        if (-not (Test-Path -LiteralPath $resolvedSkillRoot) -or
+            (Get-Content -LiteralPath (Join-Path $resolvedSkillRoot 'VERSION') -Raw).Trim() -ne '2.0.0') {
+            throw 'UpdateV2Shadow requires an existing V2.0.0 installation.'
+        }
+        if (-not (Test-Path -LiteralPath (Join-Path $source 'VERSION')) -or
+            (Get-Content -LiteralPath (Join-Path $source 'VERSION') -Raw).Trim() -ne '2.0.0') {
+            throw 'UpdateV2Shadow source must be V2.0.0.'
+        }
+
+        $agentsBefore = if (Test-Path -LiteralPath $agentsPath) { [System.IO.File]::ReadAllText($agentsPath) } else { '' }
+        if ([regex]::Matches($agentsBefore, $v1Pattern).Count -ne 0 -or
+            [regex]::Matches($agentsBefore, $v2Pattern).Count -ne 1) {
+            throw 'UpdateV2Shadow requires exactly one active V2 block and no V1 block.'
+        }
+
+        New-Item -ItemType Directory -Force -Path $runtimeRoot | Out-Null
+        $stamp = Get-Date -Format 'yyyyMMdd-HHmmss-fff'
+        $backupRoot = Join-Path $runtimeRoot "backups\v2-pre-update-$stamp"
+        $runtimeSnapshot = Join-Path $backupRoot 'runtime-state'
+        New-Item -ItemType Directory -Path $backupRoot | Out-Null
+        New-Item -ItemType Directory -Path $runtimeSnapshot | Out-Null
+        Copy-Item -Recurse -LiteralPath $resolvedSkillRoot -Destination (Join-Path $backupRoot 'installed-skill')
+        Copy-Item -LiteralPath $agentsPath -Destination (Join-Path $backupRoot 'AGENTS.md')
+        foreach ($name in @('v2-state.json', 'workstream-registry.json', 'workstream-registry.json.bak')) {
+            $activePath = Join-Path $runtimeRoot $name
+            if (Test-Path -LiteralPath $activePath) {
+                Copy-Item -LiteralPath $activePath -Destination (Join-Path $runtimeSnapshot $name)
+            }
+        }
+        $updateManifestPath = Write-BackupManifest $backupRoot
+
+        $skillParent = Split-Path -Parent $resolvedSkillRoot
+        $stagingRoot = Join-Path $skillParent "auto-visible-team-router-v2-update-staging-$stamp"
+        Copy-RouterSource -Source $source -Destination $stagingRoot
+        $stagedValidation = @(& (Join-Path $stagingRoot 'scripts\Validate-Router.ps1') -Root $stagingRoot)
+        if ($stagedValidation -notcontains 'V2_OFFLINE_VALIDATION_PASS') {
+            throw "Staged V2 update validation failed: $($stagedValidation -join '; ')"
+        }
+
+        $oldSkillSwap = Join-Path $skillParent "auto-visible-team-router-v2-live-$stamp"
+        try {
+            Move-Item -LiteralPath $resolvedSkillRoot -Destination $oldSkillSwap
+            Move-Item -LiteralPath $stagingRoot -Destination $resolvedSkillRoot
+
+            $freshRegistry = [ordered]@{
+                schemaVersion = 1
+                defaults = [ordered]@{ worktreeBudget = 3; maxCodingLanes = 3 }
+                projects = [ordered]@{}
+            }
+            Write-JsonAtomic -Path (Join-Path $runtimeRoot 'workstream-registry.json') -Value $freshRegistry
+            $registryBackupPath = Join-Path $runtimeRoot 'workstream-registry.json.bak'
+            if (Test-Path -LiteralPath $registryBackupPath) {
+                Move-Item -Force -LiteralPath $registryBackupPath -Destination (Join-Path $runtimeSnapshot 'workstream-registry.json.bak.after-swap')
+            }
+
+            Set-AgentsRouterBlock -AgentsPath $agentsPath -TemplateRoot $resolvedSkillRoot -TargetMode 'SHADOW'
+            $state['mode'] = 'SHADOW'
+            $state['canary'] = $null
+            $state['telemetryEnabled'] = $false
+            $state['installedSourceIdentity'] = $SourceIdentity.ToLowerInvariant()
+            $state['previousV2Backup'] = $backupRoot
+            $state['previousV2BackupManifest'] = $updateManifestPath
+            $state['updatedAt'] = (Get-Date).ToString('o')
+            Write-JsonAtomic -Path $statePath -Value $state
+
+            Move-Item -LiteralPath $oldSkillSwap -Destination (Join-Path $backupRoot 'installed-skill-live')
+            $updateManifestPath = Write-BackupManifest $backupRoot
+            $state = Read-JsonFile $statePath
+            $state['previousV2BackupManifest'] = $updateManifestPath
+            Write-JsonAtomic -Path $statePath -Value $state
+
+            $status = & $PSCommandPath -Action Status -CodexHome $homePath -SkillRoot $resolvedSkillRoot | ConvertFrom-Json
+            $freshRegistryCheck = Get-Content -LiteralPath (Join-Path $runtimeRoot 'workstream-registry.json') -Raw | ConvertFrom-Json
+            if ($status.InstalledVersion -ne '2.0.0' -or
+                $status.ActiveV1BlockCount -ne 0 -or
+                $status.ActiveV2BlockCount -ne 1 -or
+                $status.V2State.mode -ne 'SHADOW' -or
+                $status.V2State.installedSourceIdentity -ne $SourceIdentity.ToLowerInvariant() -or
+                @($freshRegistryCheck.projects.PSObject.Properties).Count -ne 0) {
+                throw 'V2 exact SHADOW update post-install verification failed.'
+            }
+        }
+        catch {
+            if (Test-Path -LiteralPath $resolvedSkillRoot) {
+                Remove-Item -Recurse -Force -LiteralPath $resolvedSkillRoot
+            }
+            if (Test-Path -LiteralPath $oldSkillSwap) {
+                Move-Item -LiteralPath $oldSkillSwap -Destination $resolvedSkillRoot
+            }
+            elseif (Test-Path -LiteralPath (Join-Path $backupRoot 'installed-skill')) {
+                Copy-Item -Recurse -LiteralPath (Join-Path $backupRoot 'installed-skill') -Destination $resolvedSkillRoot
+            }
+            Copy-Item -Force -LiteralPath (Join-Path $backupRoot 'AGENTS.md') -Destination $agentsPath
+            foreach ($name in @('v2-state.json', 'workstream-registry.json', 'workstream-registry.json.bak')) {
+                $snapshotPath = Join-Path $runtimeSnapshot $name
+                $activePath = Join-Path $runtimeRoot $name
+                if (Test-Path -LiteralPath $snapshotPath) {
+                    Copy-Item -Force -LiteralPath $snapshotPath -Destination $activePath
+                }
+                elseif (Test-Path -LiteralPath $activePath) {
+                    Remove-Item -LiteralPath $activePath
+                }
+            }
+            throw
+        }
+
+        Write-Output 'V2_EXACT_SHADOW_UPDATE_PASS'
+        Write-Output "SourceIdentity=$($SourceIdentity.ToLowerInvariant())"
+        Write-Output "PreviousV2Backup=$backupRoot"
+        break
+    }
+
+    'SetMode' {
+        $state = Read-JsonFile $statePath
+        if ($null -eq $state -or $state['version'] -ne '2.0.0') {
+            throw 'V2 state missing or invalid. InstallShadow first.'
+        }
+        if ($Mode -in @('CANARY', 'ACTIVE') -and -not $ConfirmSingleRouter) {
+            throw "$Mode requires ConfirmSingleRouter."
+        }
+        if ($Mode -eq 'CANARY' -and
+            ([string]::IsNullOrWhiteSpace($ProjectKey) -or [string]::IsNullOrWhiteSpace($BatchId))) {
+            throw 'CANARY requires ProjectKey and BatchId.'
+        }
+        if ($Mode -eq 'CANARY') {
+            Assert-ProjectKeyFormat $ProjectKey
+        }
+
+        $agentsContent = if (Test-Path -LiteralPath $agentsPath) { [System.IO.File]::ReadAllText($agentsPath) } else { '' }
+        if ([regex]::Matches($agentsContent, $v1Pattern).Count -gt 0) {
+            throw 'DUAL_ROUTER_BLOCKED: V1 managed AGENTS block remains.'
+        }
+        Set-AgentsRouterBlock -AgentsPath $agentsPath -TemplateRoot $resolvedSkillRoot -TargetMode $Mode -CanaryProjectKey $ProjectKey -CanaryBatchId $BatchId
+
+        if ($Mode -eq 'CANARY') {
+            $state['canary'] = [ordered]@{
+                projectKey = $ProjectKey
+                batchId = $BatchId
+                authorizedAt = (Get-Date).ToString('o')
+            }
+        }
+        else {
+            $state['canary'] = $null
+        }
+        $state['mode'] = $Mode
+        $state['updatedAt'] = (Get-Date).ToString('o')
+        Write-JsonAtomic -Path $statePath -Value $state
+        Write-Output "V2_MODE=$Mode"
+        break
+    }
+
+    'EnableTelemetry' {
+        $state = Read-JsonFile $statePath
+        if ($null -eq $state) {
+            throw 'V2 state missing.'
+        }
+        $state['telemetryEnabled'] = $true
+        $state['updatedAt'] = (Get-Date).ToString('o')
+        Write-JsonAtomic -Path $statePath -Value $state
+        Write-Output 'V2_TELEMETRY=ENABLED'
+        break
+    }
+
+    'DisableTelemetry' {
+        $state = Read-JsonFile $statePath
+        if ($null -eq $state) {
+            throw 'V2 state missing.'
+        }
+        $state['telemetryEnabled'] = $false
+        $state['updatedAt'] = (Get-Date).ToString('o')
+        Write-JsonAtomic -Path $statePath -Value $state
+        Write-Output 'V2_TELEMETRY=DISABLED'
+        break
+    }
+
+    'UninstallV2' {
+        if (-not $ConfirmUninstall) {
+            throw 'UninstallV2 requires ConfirmUninstall.'
+        }
+        if (Test-Path -LiteralPath $resolvedSkillRoot) {
+            if ((Get-Content -LiteralPath (Join-Path $resolvedSkillRoot 'VERSION') -Raw).Trim() -ne '2.0.0') {
+                throw 'Refusing to remove a non-V2 Skill root.'
+            }
+            Remove-Item -Recurse -Force -LiteralPath $resolvedSkillRoot
+        }
+        Set-AgentsRouterBlock -AgentsPath $agentsPath -TemplateRoot $resolvedSkillRoot -TargetMode 'DISABLED'
+        Write-Output 'V2_SKILL_REMOVED; runtime, backups, and legacy archives retained.'
+        break
     }
 }

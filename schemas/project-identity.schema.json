@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "V2 Project Identity",
+  "type": "object",
+  "required": [
+    "status",
+    "projectIdentitySource",
+    "projectKey",
+    "projectId",
+    "canonicalGitRoot",
+    "canonicalPath",
+    "headSha",
+    "remoteUrl",
+    "repositoryIdentity",
+    "blocker"
+  ],
+  "properties": {
+    "status": { "enum": ["PASS", "BLOCKED"] },
+    "projectIdentitySource": { "enum": ["APP_PROJECT_ID", "GIT_ROOT", "CANONICAL_PATH", "NONE"] },
+    "projectKey": { "type": ["string", "null"], "pattern": "^(id|git|path):.+" },
+    "projectId": { "type": ["string", "null"] },
+    "canonicalGitRoot": { "type": ["string", "null"] },
+    "canonicalPath": { "type": ["string", "null"] },
+    "headSha": { "type": ["string", "null"], "pattern": "^[0-9a-f]{40}$" },
+    "remoteUrl": { "type": ["string", "null"] },
+    "repositoryIdentity": { "type": ["object", "null"] },
+    "blocker": { "type": ["string", "null"] }
+  }
+}

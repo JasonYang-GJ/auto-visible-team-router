@@ -11,6 +11,8 @@ tmp/
 temp/
 cache/
 .cache/
+__pycache__/
+*.pyc
 
 # Runtime and backup state
 runtime/
@@ -20,6 +22,10 @@ thread-registry.json
 thread-registry.json.*
 module-registry.json
 module-registry.json.*
+workstream-registry.json
+workstream-registry.json.*
+v2-state.json
+legacy-v1/
 
 # Tool and editor state
 .idea/

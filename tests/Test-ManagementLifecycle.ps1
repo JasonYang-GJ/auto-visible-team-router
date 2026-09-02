@@ -1,96 +1,144 @@
 [CmdletBinding()]
 param(
-    [string]$SkillRoot = (Split-Path -Parent $PSScriptRoot)
+    [string]$Root = (Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path))
 )
 
 $ErrorActionPreference = 'Stop'
-$manager = Join-Path $SkillRoot 'scripts\Manage-Global.ps1'
-$testRoot = Join-Path ([System.IO.Path]::GetTempPath()) ("router-management-test-" + [guid]::NewGuid().ToString('N'))
-$fakeProfile = Join-Path $testRoot 'user'
-$fakeCodex = Join-Path $fakeProfile '.codex'
-$agentsPath = Join-Path $fakeCodex 'AGENTS.md'
-$installedRoot = Join-Path $fakeProfile '.agents\skills\auto-visible-team-router'
-$registryPath = Join-Path $fakeCodex 'auto-visible-team-router\thread-registry.json'
-$moduleRegistryPath = Join-Path $fakeCodex 'auto-visible-team-router\module-registry.json'
-$failures = [System.Collections.Generic.List[string]]::new()
-$utf8NoBom = New-Object System.Text.UTF8Encoding($false)
+$manage = Join-Path $Root 'scripts\Manage-Global.ps1'
+$temporaryRoot = Join-Path ([System.IO.Path]::GetTempPath()) ('auto-visible-router-v2-management-' + [guid]::NewGuid().ToString('N'))
+$codexHome = Join-Path $temporaryRoot 'codex-home'
+$skillRoot = Join-Path $temporaryRoot 'agents\skills\auto-visible-team-router'
+$runtimeRoot = Join-Path $codexHome 'auto-visible-team-router'
+$agentsPath = Join-Path $codexHome 'AGENTS.md'
 
-function Assert-True([bool]$Condition, [string]$Message) {
-    if (-not $Condition) { $failures.Add($Message) }
-}
-
-function Invoke-JsonScript([string]$Script, [hashtable]$Parameters) {
-    $raw = & $Script @Parameters | Out-String
-    return ($raw | ConvertFrom-Json)
+function Assert-True {
+    param([bool]$Condition, [string]$Message)
+    if (-not $Condition) {
+        throw $Message
+    }
 }
 
 try {
-    New-Item -ItemType Directory -Path $fakeCodex -Force | Out-Null
-    $original = "# 用户原有全局规则`r`n`r`n- 不得覆盖。`r`n"
-    [System.IO.File]::WriteAllText($agentsPath, $original, $utf8NoBom)
+    New-Item -ItemType Directory -Path $skillRoot -Force | Out-Null
+    New-Item -ItemType Directory -Path $runtimeRoot -Force | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $skillRoot 'VERSION'), "1.3.3`n", [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText((Join-Path $skillRoot 'SKILL.md'), "# V1 fixture`n", [System.Text.UTF8Encoding]::new($false))
+    [System.IO.File]::WriteAllText(
+        (Join-Path $runtimeRoot 'thread-registry.json'),
+        '{"schemaVersion":2,"entries":[{"thread":{"id":"legacy-thread"}}]}' + [Environment]::NewLine,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    [System.IO.File]::WriteAllText(
+        (Join-Path $runtimeRoot 'module-registry.json'),
+        '{"schemaVersion":1,"projects":{}}' + [Environment]::NewLine,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    New-Item -ItemType Directory -Path (Join-Path $runtimeRoot 'reports') | Out-Null
+    [System.IO.File]::WriteAllText((Join-Path $runtimeRoot 'reports\legacy.txt'), "legacy-report`n", [System.Text.UTF8Encoding]::new($false))
 
-    $managerText = [System.IO.File]::ReadAllText($manager, $utf8NoBom)
-    Assert-True ($managerText -match 'UserProfileRoot') 'Manager lacks an isolated user-profile seam.'
-    if ($managerText -notmatch 'UserProfileRoot') { throw 'RED: isolated lifecycle seam is missing.' }
+    $v1Block = @'
+<!-- BEGIN auto-visible-team-router:v1 separatorChars=0 -->
+## V1 fixture
+<!-- END auto-visible-team-router:v1 -->
+'@
+    $agentsBefore = "PREFIX-KEPT`n`n$v1Block`n`nSUFFIX-KEPT`n"
+    [System.IO.File]::WriteAllText($agentsPath, $agentsBefore, [System.Text.UTF8Encoding]::new($false))
 
-    $install1 = Invoke-JsonScript $manager @{ Action='Install'; SourceRoot=$SkillRoot; UserProfileRoot=$fakeProfile }
-    Assert-True $install1.skill_installed 'Install did not place the skill.'
-    Assert-True ($install1.managed_rule_version -eq '1.3.3') 'Install did not report V1.3.3.'
-    Assert-True (Test-Path -LiteralPath (Join-Path $installedRoot 'SKILL.md')) 'Installed SKILL.md is missing.'
-    $afterInstall1 = [System.IO.File]::ReadAllText($agentsPath, $utf8NoBom)
-    Assert-True $afterInstall1.StartsWith($original, [System.StringComparison]::Ordinal) 'Install changed original AGENTS bytes.'
-    $hash1 = (Get-FileHash -Algorithm SHA256 -LiteralPath $agentsPath).Hash
+    $installOutput = @(& $manage -Action InstallShadow -SourceRoot $Root -CodexHome $codexHome -SkillRoot $skillRoot)
+    Assert-True ($installOutput -contains 'V2_SHADOW_INSTALLED_IN_PLACE') 'InstallShadow did not report success.'
 
-    $install2 = Invoke-JsonScript $manager @{ Action='Install'; SourceRoot=$SkillRoot; UserProfileRoot=$fakeProfile }
-    $hash2 = (Get-FileHash -Algorithm SHA256 -LiteralPath $agentsPath).Hash
-    Assert-True ($hash1 -eq $hash2) 'Repeat install changed AGENTS content.'
-    Assert-True ($install2.begin_markers -eq 1 -and $install2.end_markers -eq 1) 'Repeat install duplicated markers.'
+    $status = & $manage -Action Status -CodexHome $codexHome -SkillRoot $skillRoot | ConvertFrom-Json
+    Assert-True ($status.InstalledVersion -eq '2.0.0') 'Installed version is not V2.0.0.'
+    Assert-True ($status.ActiveV1BlockCount -eq 0 -and $status.ActiveV2BlockCount -eq 1) 'Exactly one V2 block was not established.'
+    Assert-True (-not $status.LegacyThreadRegistryPresent -and -not $status.LegacyModuleRegistryPresent) 'Legacy registries remain active.'
+    Assert-True $status.V2WorkstreamRegistryPresent 'Fresh V2 Registry is missing.'
+    Assert-True ($status.LegacyArchives.Count -eq 1) 'Exactly one legacy archive is required.'
 
-    $installedRegistry = Join-Path $installedRoot 'scripts\Thread-Registry.ps1'
-    $registryInit = Invoke-JsonScript $installedRegistry @{ Action='Init' }
-    Assert-True ($registryInit.schemaVersion -eq 2) 'Installed Registry script did not initialize schema 2.'
-    Assert-True (Test-Path -LiteralPath $registryPath) 'Installed Registry script did not derive the real profile from its install path.'
+    $state = Get-Content -LiteralPath (Join-Path $runtimeRoot 'v2-state.json') -Raw | ConvertFrom-Json
+    Assert-True ($state.mode -eq 'SHADOW' -and -not $state.telemetryEnabled) 'V2 must install in SHADOW with telemetry off.'
+    Assert-True (Test-Path -LiteralPath $state.rollbackBackup) 'Rollback backup is missing.'
+    Assert-True (Test-Path -LiteralPath $state.backupManifest) 'Backup manifest is missing.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $state.rollbackBackup 'installed-skill\VERSION')) 'Installed V1 Skill backup is missing.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $state.rollbackBackup 'AGENTS.md')) 'AGENTS backup is missing.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $state.rollbackBackup 'runtime-state\thread-registry.json')) 'V1 Thread Registry backup is missing.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $state.legacyArchive 'thread-registry.json')) 'V1 Thread Registry archive is missing.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $state.legacyArchive 'module-registry.json')) 'V1 Module Registry archive is missing.'
 
-    $installedModuleRegistry = Join-Path $installedRoot 'scripts\Module-Registry.ps1'
-    $moduleStatus = Invoke-JsonScript $installedModuleRegistry @{ Action='Status' }
-    Assert-True (-not $moduleStatus.exists) 'Install must not create Module Registry state in default Shadow mode.'
-    $moduleInit = Invoke-JsonScript $installedModuleRegistry @{ Action='Init' }
-    Assert-True ($moduleInit.schemaVersion -eq 1) 'Installed Module Registry script did not initialize separate schema 1.'
-    Assert-True (Test-Path -LiteralPath $moduleRegistryPath) 'Installed Module Registry script did not derive the real profile from its install path.'
+    $backupManifest = Get-Content -LiteralPath $state.backupManifest -Raw | ConvertFrom-Json
+    foreach ($entry in $backupManifest.files) {
+        $path = Join-Path $state.rollbackBackup $entry.path
+        Assert-True (Test-Path -LiteralPath $path) "Backup entry is missing: $($entry.path)"
+        Assert-True ((Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash -eq $entry.sha256) "Backup hash mismatch: $($entry.path)"
+    }
 
-    $installedManager = Join-Path $installedRoot 'scripts\Manage-Global.ps1'
-    $disabled = Invoke-JsonScript $installedManager @{ Action='Disable' }
-    Assert-True (-not $disabled.managed_rule_enabled) 'Disable left the global rule enabled.'
-    Assert-True (Test-Path -LiteralPath $installedRoot) 'Disable removed the skill files.'
-    Assert-True $disabled.module_registry_retained 'Disable did not retain Module Registry state.'
-    $disableManifest = Get-Content -LiteralPath (Join-Path $disabled.backup_dir 'manifest.json') -Raw | ConvertFrom-Json
-    Assert-True (-not [string]::IsNullOrWhiteSpace($disableManifest.registry_sha256)) 'Backup did not record Thread Registry SHA256.'
-    Assert-True (-not [string]::IsNullOrWhiteSpace($disableManifest.module_registry_sha256)) 'Backup did not record Module Registry SHA256.'
-    Assert-True (Test-Path -LiteralPath (Join-Path $disabled.backup_dir 'state\thread-registry.json')) 'Backup did not copy Thread Registry state.'
-    Assert-True (Test-Path -LiteralPath (Join-Path $disabled.backup_dir 'state\module-registry.json')) 'Backup did not copy Module Registry state.'
-    $afterDisable = [System.IO.File]::ReadAllText($agentsPath, $utf8NoBom)
-    Assert-True ($afterDisable -ceq $original) 'Disable did not restore original AGENTS bytes exactly.'
+    $freshRegistry = Get-Content -LiteralPath (Join-Path $runtimeRoot 'workstream-registry.json') -Raw | ConvertFrom-Json
+    Assert-True ($freshRegistry.schemaVersion -eq 1) 'Fresh Registry schema is invalid.'
+    Assert-True ($freshRegistry.defaults.worktreeBudget -eq 3 -and $freshRegistry.defaults.maxCodingLanes -eq 3) 'Fresh Registry defaults are invalid.'
+    Assert-True (@($freshRegistry.projects.PSObject.Properties).Count -eq 0) 'Fresh Registry must not reinterpret V1 entries.'
 
-    $enabled = Invoke-JsonScript $installedManager @{ Action='Enable' }
-    Assert-True $enabled.managed_rule_enabled 'Enable did not restore the global rule.'
-    $afterEnable = [System.IO.File]::ReadAllText($agentsPath, $utf8NoBom)
-    Assert-True $afterEnable.StartsWith($original, [System.StringComparison]::Ordinal) 'Enable changed original AGENTS bytes.'
+    $agentsShadow = [System.IO.File]::ReadAllText($agentsPath)
+    Assert-True ($agentsShadow.Contains('PREFIX-KEPT') -and $agentsShadow.Contains('SUFFIX-KEPT')) 'Unrelated AGENTS bytes were not preserved.'
+    Assert-True ($agentsShadow.Contains('installed in SHADOW mode')) 'SHADOW block is missing.'
+    Assert-True (-not $agentsShadow.Contains('V1 fixture')) 'V1 block remains reachable.'
+    Assert-True (-not (Test-Path -LiteralPath (Join-Path $skillRoot '.git'))) 'Git metadata must not be installed with the Skill.'
 
-    $uninstalled = Invoke-JsonScript $installedManager @{ Action='Uninstall'; ConfirmUninstall=$true }
-    Assert-True $uninstalled.skill_removed 'Uninstall did not remove the exact skill directory.'
-    Assert-True (-not (Test-Path -LiteralPath $installedRoot)) 'Skill directory still exists after uninstall.'
-    Assert-True (([System.IO.File]::ReadAllText($agentsPath, $utf8NoBom)) -ceq $original) 'Uninstall did not restore original AGENTS bytes.'
-    Assert-True (Test-Path -LiteralPath $registryPath) 'Uninstall must retain the user Thread Registry.'
-    Assert-True (Test-Path -LiteralPath $moduleRegistryPath) 'Uninstall must retain the user Module Registry.'
-    Assert-True (Test-Path -LiteralPath $uninstalled.backup_dir) 'Uninstall backup is missing.'
+    $preUpdateRegistry = @{
+        schemaVersion = 1
+        defaults = @{ worktreeBudget = 3; maxCodingLanes = 3 }
+        projects = @{ 'path:C:\old-v2-evidence' = @{ batches = @{} } }
+    } | ConvertTo-Json -Depth 10
+    [System.IO.File]::WriteAllText(
+        (Join-Path $runtimeRoot 'workstream-registry.json'),
+        $preUpdateRegistry + [Environment]::NewLine,
+        [System.Text.UTF8Encoding]::new($false)
+    )
+    $sourceIdentity = ('a' * 40)
+    $updateOutput = @(& $manage -Action UpdateV2Shadow -SourceRoot $Root -SourceIdentity $sourceIdentity -CodexHome $codexHome -SkillRoot $skillRoot)
+    Assert-True ($updateOutput -contains 'V2_EXACT_SHADOW_UPDATE_PASS') 'UpdateV2Shadow did not report success.'
+
+    $updatedState = Get-Content -LiteralPath (Join-Path $runtimeRoot 'v2-state.json') -Raw | ConvertFrom-Json
+    Assert-True ($updatedState.mode -eq 'SHADOW' -and $updatedState.installedSourceIdentity -eq $sourceIdentity) 'Exact source identity was not installed in SHADOW.'
+    Assert-True (Test-Path -LiteralPath $updatedState.previousV2Backup) 'Previous V2 backup is missing.'
+    Assert-True (Test-Path -LiteralPath $updatedState.previousV2BackupManifest) 'Previous V2 backup manifest is missing.'
+    Assert-True (Test-Path -LiteralPath (Join-Path $updatedState.previousV2Backup 'installed-skill\VERSION')) 'Previous installed V2 Skill was not backed up.'
+    $previousRegistry = Get-Content -LiteralPath (Join-Path $updatedState.previousV2Backup 'runtime-state\workstream-registry.json') -Raw | ConvertFrom-Json
+    Assert-True ($null -ne $previousRegistry.projects.'path:C:\old-v2-evidence') 'Previous V2 Registry evidence was not preserved.'
+    $updatedRegistry = Get-Content -LiteralPath (Join-Path $runtimeRoot 'workstream-registry.json') -Raw | ConvertFrom-Json
+    Assert-True (@($updatedRegistry.projects.PSObject.Properties).Count -eq 0) 'Exact V2 update must initialize a fresh Registry.'
+    Assert-True ((Get-Content -LiteralPath (Join-Path $skillRoot 'SKILL.md') -Raw).Contains('Logical routing is separate from execution placement')) 'Updated platform-adaptive Skill was not installed.'
+    Assert-True ([System.IO.File]::ReadAllText($agentsPath).Contains('installed in SHADOW mode')) 'Exact update must return AGENTS to SHADOW.'
+
+    & $manage -Action SetMode -Mode CANARY -ProjectKey 'path:C:\fixture' -BatchId 'synthetic-v2' -ConfirmSingleRouter -CodexHome $codexHome -SkillRoot $skillRoot | Out-Null
+    $agentsCanary = [System.IO.File]::ReadAllText($agentsPath)
+    Assert-True ($agentsCanary.Contains('CANARY mode') -and $agentsCanary.Contains('synthetic-v2')) 'CANARY block is not batch-scoped.'
+
+    & $manage -Action SetMode -Mode ACTIVE -ConfirmSingleRouter -CodexHome $codexHome -SkillRoot $skillRoot | Out-Null
+    $agentsActive = [System.IO.File]::ReadAllText($agentsPath)
+    Assert-True ($agentsActive.Contains('V2 is ACTIVE')) 'ACTIVE block is missing.'
+
+    & $manage -Action SetMode -Mode SHADOW -CodexHome $codexHome -SkillRoot $skillRoot | Out-Null
+    & $manage -Action EnableTelemetry -CodexHome $codexHome -SkillRoot $skillRoot | Out-Null
+    & $manage -Action DisableTelemetry -CodexHome $codexHome -SkillRoot $skillRoot | Out-Null
+    $stateAfter = Get-Content -LiteralPath (Join-Path $runtimeRoot 'v2-state.json') -Raw | ConvertFrom-Json
+    Assert-True ($stateAfter.mode -eq 'SHADOW' -and -not $stateAfter.telemetryEnabled) 'Mode/telemetry lifecycle is invalid.'
+
+    $v1Conflict = [System.IO.File]::ReadAllText($agentsPath) + [Environment]::NewLine + $v1Block
+    [System.IO.File]::WriteAllText($agentsPath, $v1Conflict, [System.Text.UTF8Encoding]::new($false))
+    $blocked = $false
+    try {
+        & $manage -Action SetMode -Mode ACTIVE -ConfirmSingleRouter -CodexHome $codexHome -SkillRoot $skillRoot | Out-Null
+    }
+    catch {
+        $blocked = $_.Exception.Message -match 'DUAL_ROUTER_BLOCKED|Multiple managed router blocks'
+    }
+    Assert-True $blocked 'Stale V1 AGENTS coexistence must fail closed.'
+
+    Write-Output 'V2_MANAGEMENT_LIFECYCLE_PASS'
 }
 finally {
-    if (Test-Path -LiteralPath $testRoot) { Remove-Item -LiteralPath $testRoot -Recurse -Force }
+    $resolvedTemporaryRoot = [System.IO.Path]::GetFullPath($temporaryRoot)
+    $resolvedSystemTemp = [System.IO.Path]::GetFullPath([System.IO.Path]::GetTempPath())
+    if ((Test-Path -LiteralPath $resolvedTemporaryRoot) -and $resolvedTemporaryRoot.StartsWith($resolvedSystemTemp, [System.StringComparison]::OrdinalIgnoreCase)) {
+        [System.IO.Directory]::Delete($resolvedTemporaryRoot, $true)
+    }
 }
-
-[pscustomobject]@{
-    suite = 'Global management lifecycle and byte preservation'
-    passed = ($failures.Count -eq 0)
-    failures = $failures
-} | ConvertTo-Json -Depth 6
-if ($failures.Count -gt 0) { exit 1 }

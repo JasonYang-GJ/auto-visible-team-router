@@ -1,0 +1,356 @@
+[
+  {
+    "id": "S01_tiny_typo",
+    "description": "One low-risk UI label typo in one file.",
+    "expected": {
+      "route": [
+        "LOCAL"
+      ],
+      "qa": false,
+      "security": false,
+      "maxCodingLanes": 1
+    }
+  },
+  {
+    "id": "S02_small_config",
+    "description": "One local config default changes with targeted test.",
+    "expected": {
+      "route": [
+        "LOCAL",
+        "SERIAL_1"
+      ],
+      "qa": false,
+      "security": false,
+      "maxCodingLanes": 1
+    }
+  },
+  {
+    "id": "S03_cross_layer_vertical_slice",
+    "description": "Settings UI + state + existing provider config across 8 files, one safe owner.",
+    "expected": {
+      "route": [
+        "LOCAL",
+        "SERIAL_1"
+      ],
+      "qa": false,
+      "security": false,
+      "maxCodingLanes": 1
+    }
+  },
+  {
+    "id": "S04_two_disjoint_frozen_contract",
+    "description": "Core producer and UI consumer have frozen protocol and disjoint writes.",
+    "expected": {
+      "route": [
+        "PARALLEL_2"
+      ],
+      "qa": true,
+      "security": false,
+      "maxCodingLanes": 2
+    }
+  },
+  {
+    "id": "S05_unfrozen_shared_contract",
+    "description": "Two candidate lanes need a new shared protocol schema not yet decided.",
+    "expected": {
+      "route": [
+        "PLAN_FIRST",
+        "SERIAL_1"
+      ],
+      "qa": true,
+      "security": false,
+      "maxCodingLanes": 2
+    }
+  },
+  {
+    "id": "S06_overlapping_shared_file",
+    "description": "Two proposed lanes both need to edit the same core factory file.",
+    "expected": {
+      "route": [
+        "SERIAL_1",
+        "PLAN_FIRST",
+        "BLOCKED"
+      ],
+      "qa": false,
+      "security": false,
+      "maxCodingLanes": 1
+    }
+  },
+  {
+    "id": "S07_cancellation",
+    "description": "Cancellation/recovery semantics in one bounded core lane.",
+    "expected": {
+      "route": [
+        "LOCAL",
+        "SERIAL_1"
+      ],
+      "qa": true,
+      "security": false,
+      "maxCodingLanes": 1
+    }
+  },
+  {
+    "id": "S08_credentials",
+    "description": "Credential lease and auth boundary change.",
+    "expected": {
+      "route": [
+        "LOCAL",
+        "SERIAL_1"
+      ],
+      "qa": true,
+      "security": true,
+      "maxCodingLanes": 1
+    }
+  },
+  {
+    "id": "S09_migration",
+    "description": "Database schema migration with rollback/forward behavior.",
+    "expected": {
+      "route": [
+        "LOCAL",
+        "SERIAL_1"
+      ],
+      "qa": true,
+      "security": false,
+      "maxCodingLanes": 1
+    }
+  },
+  {
+    "id": "S10_three_independent_modules",
+    "description": "Three truly independent feature deliverables with frozen interfaces and disjoint writes.",
+    "expected": {
+      "route": [
+        "PARALLEL_3"
+      ],
+      "qa": true,
+      "security": false,
+      "maxCodingLanes": 3
+    }
+  },
+  {
+    "id": "S11_four_independent_backlog_items",
+    "description": "Four independent items could run, but default concurrency cap is 3.",
+    "expected": {
+      "route": [
+        "PARALLEL_3"
+      ],
+      "qa": true,
+      "security": false,
+      "maxCodingLanes": 3,
+      "note": "wave scheduling required"
+    }
+  },
+  {
+    "id": "S12_parallel_no_time_benefit",
+    "description": "Two possible lanes are independent but each is tiny and integration overhead dominates.",
+    "expected": {
+      "route": [
+        "LOCAL",
+        "SERIAL_1"
+      ],
+      "qa": false,
+      "security": false,
+      "maxCodingLanes": 1
+    }
+  },
+  {
+    "id": "S13_release_candidate",
+    "description": "Release candidate with no new architecture.",
+    "expected": {
+      "route": [
+        "LOCAL",
+        "SERIAL_1"
+      ],
+      "qa": true,
+      "security": false,
+      "maxCodingLanes": 1
+    }
+  },
+  {
+    "id": "S14_security_boundary",
+    "description": "External execution trust boundary changes.",
+    "expected": {
+      "route": [
+        "LOCAL",
+        "SERIAL_1",
+        "PLAN_FIRST"
+      ],
+      "qa": true,
+      "security": true,
+      "maxCodingLanes": 1
+    }
+  },
+  {
+    "id": "S15_new_architecture",
+    "description": "New system boundary and several long-term technical routes.",
+    "expected": {
+      "route": [
+        "PLAN_FIRST"
+      ],
+      "qa": false,
+      "security": false,
+      "architect": true,
+      "maxCodingLanes": 0
+    }
+  },
+  {
+    "id": "S16_shadow_no_side_effects",
+    "description": "Any engineering task while V2 mode is SHADOW.",
+    "expected": {
+      "sideEffects": false,
+      "threadsCreated": 0,
+      "worktreesCreated": 0
+    }
+  },
+  {
+    "id": "S17_dual_router_unknown",
+    "description": "CANARY requested but V1 same-task activity cannot be proven inactive.",
+    "expected": {
+      "route": [
+        "BLOCKED"
+      ],
+      "reason": "DUAL_ROUTER_BLOCKED"
+    }
+  },
+  {
+    "id": "S18_new_batch_no_role_reuse",
+    "description": "New batch has same capability as old Developer thread but unrelated objective.",
+    "expected": {
+      "reuseOldRoleThread": false
+    }
+  },
+  {
+    "id": "S19_same_batch_repair",
+    "description": "QA finding returns to same workstream with unchanged ownership/contract.",
+    "expected": {
+      "reuseSameWorkstreamThread": true,
+      "useContextDelta": true
+    }
+  },
+  {
+    "id": "S20_repo_wide_not_default",
+    "description": "Normal cross-layer feature has known files/contracts.",
+    "expected": {
+      "initialReadScope": 1,
+      "repositoryWideScan": false
+    }
+  },
+  {
+    "id": "S21_independent_qa_after_integration",
+    "description": "Two low-risk lanes integrate into one candidate.",
+    "expected": {
+      "qaPhase": "post_integration",
+      "perLaneQaDefault": false
+    }
+  },
+  {
+    "id": "S22_high_risk_lane_preqa",
+    "description": "One of two lanes changes credential boundary.",
+    "expected": {
+      "qa": true,
+      "security": true,
+      "allowPreIntegrationGate": true
+    }
+  },
+  {
+    "id": "S23_one_lane_no_new_worktree",
+    "description": "Single coding lane with safe existing checkout.",
+    "expected": {
+      "newWorktree": false
+    }
+  },
+  {
+    "id": "S24_three_lane_budget",
+    "description": "Three parallel writers need isolation and are disjoint.",
+    "expected": {
+      "maxRouterManagedWorktrees": 3
+    }
+  },
+  {
+    "id": "S25_local_current_thread",
+    "description": "Tiny LOCAL work uses the current task.",
+    "expected": {
+      "logicalRoute": "LOCAL",
+      "executionBackend": "CURRENT_THREAD",
+      "extraAgents": 0
+    }
+  },
+  {
+    "id": "S26_serial_current_thread",
+    "description": "SERIAL_1 defaults to the current task.",
+    "expected": {
+      "executionBackend": "CURRENT_THREAD",
+      "executionMode": "SERIAL"
+    }
+  },
+  {
+    "id": "S27_parallel2_serialized_fallback",
+    "description": "Logical PARALLEL_2 degrades safely when no isolated backend exists.",
+    "expected": {
+      "logicalRoute": "PARALLEL_2",
+      "executionBackend": "CURRENT_THREAD",
+      "executionMode": "SERIALIZED_FALLBACK"
+    }
+  },
+  {
+    "id": "S28_parallel3_serialized_waves",
+    "description": "Logical PARALLEL_3 degrades to serialized waves.",
+    "expected": {
+      "logicalRoute": "PARALLEL_3",
+      "executionMode": "SERIALIZED_WAVES"
+    }
+  },
+  {
+    "id": "S29_auto_visible_unsupported",
+    "description": "Automatic visible Worktree creation is frozen by platform evidence.",
+    "expected": {
+      "backend": "AUTO_VISIBLE_WORKTREE",
+      "availability": "UNSUPPORTED",
+      "reason": "THREAD_CREATION_PLATFORM_LIMITATION",
+      "createThreadCalled": false
+    }
+  },
+  {
+    "id": "S30_manual_visible_ready",
+    "description": "Explicit visible parallel request waits for user-assisted dispatch.",
+    "expected": {
+      "executionBackend": "MANUAL_VISIBLE_WORKTREE",
+      "executionMode": "READY_FOR_MANUAL_VISIBLE_DISPATCH"
+    }
+  },
+  {
+    "id": "S31_collab_shared_worktree",
+    "description": "Collaboration Agent schema has no independent checkout.",
+    "expected": {
+      "available": true,
+      "independentContext": true,
+      "explicitCwd": false,
+      "independentCheckout": false,
+      "codingParallelism": "FORBIDDEN"
+    }
+  },
+  {
+    "id": "S32_true_parallel_required",
+    "description": "A true-concurrency correctness test blocks without a safe backend.",
+    "expected": {
+      "route": "BLOCKED",
+      "reason": "SAFE_PARALLEL_BACKEND_UNAVAILABLE"
+    }
+  },
+  {
+    "id": "S33_ordinary_feature_not_blocked",
+    "description": "Visible backend unavailability does not block an ordinary Feature.",
+    "expected": {
+      "route": "PARALLEL_2",
+      "executionMode": "SERIALIZED_FALLBACK"
+    }
+  },
+  {
+    "id": "S34_unknown_worktree_preserved",
+    "description": "Historical unknown Worktrees remain unowned and preserved.",
+    "expected": {
+      "adopted": false,
+      "deleted": false
+    }
+  }
+]

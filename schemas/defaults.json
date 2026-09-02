@@ -1,0 +1,87 @@
+{
+  "schemaVersion": 1,
+  "version": "2.0.0",
+  "defaultMode": "SHADOW",
+  "maxCodingLanes": 3,
+  "worktreeBudget": 3,
+  "defaultExecutionBackend": "CURRENT_THREAD",
+  "executionBackendSelectionOrder": [
+    "CURRENT_THREAD",
+    "COLLAB_SUBAGENT",
+    "MANUAL_VISIBLE_WORKTREE",
+    "AUTO_VISIBLE_WORKTREE"
+  ],
+  "executionBackends": {
+    "CURRENT_THREAD": {
+      "availability": "AVAILABLE",
+      "codingParallelism": "SERIAL_ONLY"
+    },
+    "COLLAB_SUBAGENT": {
+      "availability": "AVAILABLE_WITH_LIMITS",
+      "visibleInSidebar": false,
+      "independentContext": true,
+      "explicitCwd": false,
+      "gitWorktree": false,
+      "independentCheckout": false,
+      "stableAgentId": true,
+      "resultReadable": true,
+      "boundedPacket": true,
+      "codingParallelism": "FORBIDDEN"
+    },
+    "MANUAL_VISIBLE_WORKTREE": {
+      "availability": "OPTIONAL_USER_ASSISTED",
+      "requiresExplicitUserRequest": true,
+      "requiresRealThreadId": true,
+      "requiresContainmentPass": true
+    },
+    "AUTO_VISIBLE_WORKTREE": {
+      "availability": "UNSUPPORTED",
+      "reason": "THREAD_CREATION_PLATFORM_LIMITATION",
+      "productionDispatchEnabled": false
+    }
+  },
+  "parallelBackendUnavailablePolicy": "SERIALIZED_FALLBACK",
+  "telemetryEnabledByDefault": false,
+  "registryKey": [
+    "projectKey",
+    "batchId",
+    "workstreamId"
+  ],
+  "projectIdentityPriority": [
+    "APP_PROJECT_ID",
+    "GIT_ROOT",
+    "CANONICAL_PATH"
+  ],
+  "projectKeyPrefixes": [
+    "id:",
+    "git:",
+    "path:"
+  ],
+  "projectIdRequired": false,
+  "threadCwdIsProjectIdentity": false,
+  "repositoryContainmentResolver": "scripts/Resolve-RepositoryContainment.ps1",
+  "containmentCategories": [
+    "PRIMARY_CHECKOUT",
+    "RELATED_GIT_WORKTREE",
+    "UNRELATED_CHECKOUT",
+    "UNKNOWN"
+  ],
+  "checkoutTypes": [
+    "PRIMARY_CHECKOUT",
+    "CODEX_MANAGED_WORKTREE",
+    "PERMANENT_WORKTREE",
+    "UNRELATED_CHECKOUT",
+    "UNKNOWN"
+  ],
+  "worktreeManagementTypes": [
+    "PRIMARY",
+    "CODEX_MANAGED",
+    "ROUTER_MANAGED",
+    "EXTERNAL",
+    "UNKNOWN"
+  ],
+  "activeRouterMutualExclusionRequired": true,
+  "v1RuntimePath": "auto-visible-team-router",
+  "v2RuntimePath": "auto-visible-team-router",
+  "upgradeStrategy": "in-place-v1.3.3-to-v2"
+}

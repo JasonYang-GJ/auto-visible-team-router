@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "V2 Route Proposal",
+  "type": "object",
+  "required": [
+    "mode",
+    "route",
+    "logical_route",
+    "execution_backend",
+    "execution_mode",
+    "batch_id",
+    "objective",
+    "deliverables",
+    "risk_gates"
+  ],
+  "properties": {
+    "mode": {
+      "enum": [
+        "SHADOW",
+        "CANARY",
+        "ACTIVE"
+      ]
+    },
+    "route": {
+      "enum": [
+        "LOCAL",
+        "SERIAL_1",
+        "PARALLEL_2",
+        "PARALLEL_3",
+        "PLAN_FIRST",
+        "BLOCKED"
+      ]
+    },
+    "logical_route": {
+      "enum": [
+        "LOCAL",
+        "SERIAL_1",
+        "PARALLEL_2",
+        "PARALLEL_3",
+        "PLAN_FIRST",
+        "BLOCKED"
+      ]
+    },
+    "execution_backend": {
+      "enum": [
+        "CURRENT_THREAD",
+        "COLLAB_SUBAGENT",
+        "MANUAL_VISIBLE_WORKTREE",
+        "AUTO_VISIBLE_WORKTREE",
+        "NONE"
+      ]
+    },
+    "execution_mode": {
+      "enum": [
+        "DIRECT",
+        "SERIAL",
+        "PARALLEL",
+        "SERIALIZED_FALLBACK",
+        "SERIALIZED_WAVES",
+        "READY_FOR_MANUAL_VISIBLE_DISPATCH",
+        "PLAN_FIRST",
+        "BLOCKED"
+      ]
+    },
+    "parallel_degraded": {
+      "type": "boolean"
+    },
+    "batch_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "objective": {
+      "type": "string",
+      "minLength": 1
+    },
+    "deliverables": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 64,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "outcome",
+          "dependencies",
+          "acceptance"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "owner_capability": {
+            "type": "string"
+          },
+          "write_scope": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "read_start": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "dependencies": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "acceptance": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "max_parallel_coding_lanes": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 3
+    },
+    "risk_gates": {
+      "type": "object",
+      "properties": {
+        "architect": {
+          "type": "boolean"
+        },
+        "qa": {
+          "type": "boolean"
+        },
+        "security": {
+          "type": "boolean"
+        },
+        "reviewer": {
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "architect",
+        "qa",
+        "security",
+        "reviewer"
+      ]
+    }
+  }
+}

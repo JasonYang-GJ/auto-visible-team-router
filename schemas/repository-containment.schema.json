@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "V2 Repository Containment Evidence",
+  "type": "object",
+  "required": [
+    "threadId",
+    "threadCwd",
+    "threadGitRoot",
+    "threadGitDir",
+    "threadGitCommonDir",
+    "canonicalGitRoot",
+    "canonicalGitCommonDir",
+    "projectKey",
+    "worktreeInventoryMatch",
+    "appManagedEvidenceMatch",
+    "startingSha",
+    "batchBaselineSha",
+    "lineageExplained",
+    "branchOrDetached",
+    "checkoutType",
+    "containment",
+    "containmentStatus",
+    "dirtyPaths",
+    "dirtyStateAttributed",
+    "management",
+    "createdByRouter",
+    "blocker"
+  ],
+  "properties": {
+    "threadId": { "type": ["string", "null"] },
+    "threadCwd": { "type": "string", "minLength": 1 },
+    "threadGitRoot": { "type": ["string", "null"] },
+    "threadGitDir": { "type": ["string", "null"] },
+    "threadGitCommonDir": { "type": ["string", "null"] },
+    "canonicalGitRoot": { "type": ["string", "null"] },
+    "canonicalGitCommonDir": { "type": ["string", "null"] },
+    "projectKey": { "type": ["string", "null"], "pattern": "^git:.+" },
+    "worktreeInventoryMatch": { "type": "boolean" },
+    "appManagedEvidenceMatch": { "type": "boolean" },
+    "startingSha": { "type": ["string", "null"], "pattern": "^[0-9a-fA-F]{40,64}$" },
+    "batchBaselineSha": { "type": "string", "pattern": "^[0-9a-fA-F]{40,64}$" },
+    "lineageExplained": { "type": "boolean" },
+    "branchOrDetached": { "type": ["string", "null"] },
+    "checkoutType": {
+      "enum": ["PRIMARY_CHECKOUT", "CODEX_MANAGED_WORKTREE", "PERMANENT_WORKTREE", "UNRELATED_CHECKOUT", "UNKNOWN"]
+    },
+    "containment": {
+      "enum": ["PRIMARY_CHECKOUT", "RELATED_GIT_WORKTREE", "UNRELATED_CHECKOUT", "UNKNOWN"]
+    },
+    "containmentStatus": { "enum": ["PASS", "BLOCKED"] },
+    "dirtyPaths": { "type": "array", "items": { "type": "string" } },
+    "dirtyStateAttributed": { "type": "boolean" },
+    "management": { "enum": ["PRIMARY", "CODEX_MANAGED", "ROUTER_MANAGED", "EXTERNAL", "UNKNOWN"] },
+    "createdByRouter": { "type": "boolean" },
+    "blocker": { "type": ["string", "null"] }
+  },
+  "additionalProperties": false
+}

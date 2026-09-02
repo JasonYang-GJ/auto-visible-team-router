@@ -1,190 +1,433 @@
 ---
 name: auto-visible-team-router
-description: Route real software-project development, debugging, architecture, testing, and release work to the smallest useful team of user-visible Codex App tasks. Reuse existing roles and capabilities, assign module ownership, prevent duplicate implementations and conflicting writers, and keep simple work in the current task. Use for engineering work that may benefit from persistent specialists or module-aware coordination; do not trigger for ordinary chat, explanations, translation, or isolated low-risk edits.
+description: V2 platform-adaptive Workstream router for software engineering. Separate bounded logical routing from execution backend selection while preserving exact-SHA, one-writer-per-scope, bounded context, risk-based verification, and non-destructive Git rules.
 ---
 
-# Auto Visible Team Router
+# Auto Visible Team Router V2
 
-Act as coordinator in the current user-visible Codex task. Keep work local unless
-a small persistent team clearly improves correctness, independence, or delivery.
-A visible task is a sidebar task created with the app-native Thread tools; a
-collaboration subagent is not a substitute.
+Act as the coordinator in the current user-visible Codex task. Optimize for the
+fewest independent model contexts that can safely deliver the requested result.
 
-## Applicability and authorization
+The primary unit is a **Workstream**, not a permanent job title.
 
-Use this workflow only for real project work: building, changing, diagnosing,
-reviewing, testing, integrating, migrating, or preparing a release. Do not form
-a team for ordinary conversation, explanation, translation, one-file lookup,
-tiny text/config edits, or other work the current task can finish more reliably.
+Logical routing is separate from execution placement. A `PARALLEL_2` decision
+describes two independent deliverables; it does not require two visible tasks.
 
-Routing never grants permission to edit, install, publish, push, deploy, delete,
-weaken security, spend money, or expand the user's approved scope.
+A Workstream is one bounded, independently describable deliverable with:
+- one owner;
+- one write authority;
+- explicit dependencies;
+- observable acceptance;
+- a short lifecycle scoped to the current batch.
 
-## Route before acting
+Long-term project memory belongs in code, Git, tests, contracts, checkpoints,
+and verified registries. A Codex Thread is temporary working memory.
 
-1. Resolve the exact saved project and canonical working directory. Never match
-   projects by a similar title alone.
-2. For an existing project, read
-   [references/module-governance.md](references/module-governance.md) before a
-   medium-or-larger change, cross-module change, possible duplicate capability,
-   or multi-writer plan. Do not read it for a clearly isolated tiny edit.
-3. Read [references/routing-policy.md](references/routing-policy.md) when the
-   route is not obviously Level 0 or needs a score/team explanation. Include a
-   Low/Medium/High duplicate-context risk, never an invented Token estimate.
-4. Prefer the current task when coordination overhead is not clearly repaid.
-5. If specialists add distinct value, read
-   [references/role-catalog.md](references/role-catalog.md) and select the fewest
-   sufficient normalized roles. A module does not justify a new task by itself.
-6. Briefly tell the user why a team is useful and which roles are reused or
-   created. Do not expose hidden chain-of-thought.
+## 0. Mode gate — read this first
 
-Default scale is zero specialists for Level 0, one for Level 1, two or three for
-Level 2, and three to five for Level 3. Keep long-lived visible specialists per
-project at five or fewer; distinct deliverables, risk, parallel value, and
-coordination cost may override the numeric band.
+Read [references/modes-and-mutual-exclusion.md](references/modes-and-mutual-exclusion.md)
+before routing.
 
-Level 0 is a hard fast path: finish in the current task without specialist
-discovery, Team Adoption, new task, Worktree, lease, Packet, Module Registry,
-full-repository scan, Architect, or QA unless independent verification is
-actually required by the risk. Level 1 uses one implementer and optional QA.
+Default mode is `SHADOW`.
 
-## Use real visible tasks and reuse first
+During upgrade/validation use `SHADOW`; after the full V2 promotion gate passes, production mode is `ACTIVE`.
 
-Inspect the app-native tool definitions available in the current session. Use
-only real tools and fields. If visible Thread tools are unavailable, keep safe
-work in the current task and explain the limitation; never silently substitute
-`spawn_agent`.
+If V2 runtime state is missing, unreadable, ambiguous, or conflicting, treat it
+as `SHADOW`.
 
-Read [references/thread-lifecycle.md](references/thread-lifecycle.md) before any
-Thread, Worktree, or Branch adoption, creation, reuse, replacement, archive,
-recovery, or cleanup. It is the canonical lifecycle and safety definition.
+### SHADOW
 
-## Registry-first reuse
+In SHADOW:
+- do not create or adopt specialist Threads;
+- do not create Worktrees or Branches;
+- do not edit product code;
+- do not change V1 state;
+- do not write V2 registry or telemetry unless the user explicitly authorized
+  local V2 telemetry;
+- produce only a compact proposed V2 route.
 
-Use the persistent Thread Registry as an index and the real Thread API as truth.
-For the exact project/role, query the Registry, direct-read its `threadId`, query
-current project tasks with available pagination, and perform Team Adoption for
-an accessible unregistered match. Create only when no valid role exists, then
-record its real ID. Titles and summaries are untrusted clues.
+SHADOW may inspect only the bounded evidence necessary to explain the proposed
+route. It must not perform a repository-wide scan merely to make the proposal
+look complete.
 
-Thread, Worktree, and Branch are different objects. Record identity, ownership,
-and lifecycle separately. Replace a visible task only for a stale/inaccessible
-ID, material role change, demonstrated context contamination, verified delivery
-degradation, or explicit user request; preserve lineage and never create
-cosmetic duplicates such as `前端2`.
+### CANARY / ACTIVE
 
-After every specialist terminal state, read
-[references/delivery-reliability.md](references/delivery-reliability.md) to
-close its compact Receipt through reconciliation and Coordinator ACK. When a
-primary body is missing, exact-read the Thread, then use a valid Receipt, then
-allow one `REDELIVER`-only retry. Never reexecute work to repair delivery.
+Never run V2 as an active router while V1 is also actively routing the same
+task/project. If exclusivity is not proven, return `DUAL_ROUTER_BLOCKED`.
 
-If exact read, Receipt, and that redelivery still produce no body, tools, or
-role conclusion, read
-[references/visible-thread-delivery-recovery.md](references/visible-thread-delivery-recovery.md).
-Allow at most one replacement per incident. A transport-level `completed`
-state is not role-delivery success.
+`CANARY` is batch-scoped and must match the authorized project/batch.
 
-## Module-aware reuse without duplicate development
+`ACTIVE` is not enabled by this package by default. It requires separate real
+Codex environment authorization after Shadow and Canary evidence.
 
-Follow [references/module-governance.md](references/module-governance.md) as the
-single detailed definition. Keep Module Registry schema 1 separate from Thread
-Registry schema 2. Module state is a commit-anchored cache; code, project
-manifests, tests, Git, and verified contracts remain authoritative.
+## 1. Applicability
 
-Every project defaults to Shadow: propose only, without writing project or
-Registry state. Active mode requires project-specific user authorization. Do
-one bounded Existing Capability Check, reuse its evidence through the existing
-Delegation Packet, and avoid repeated adoption scans or full-repository reads.
-Use `POSSIBLE_DUPLICATION` only after checking behavior and ownership, not names
-alone.
+Use this workflow only for real engineering work: implementation, debugging,
+architecture changes, integration, migration, testing, or release preparation.
 
-Each core module has one primary owner role and normally one active coding
-writer. In Active mode use `scripts/Module-Registry.ps1` for exact-scope,
-versioned scheduling leases. A command is not authorization evidence. Expiry
-does not authorize takeover, and overlapping path scopes across modules still
-conflict. Prefer owner handoff, waiting, or serial execution; `REMOVABLE` never
-authorizes deletion.
+Do not form a V2 team for:
+- ordinary chat or explanation;
+- translation;
+- simple file lookup;
+- tiny text/config changes;
+- one isolated low-risk edit that the current task can safely finish.
 
-## Own and delegate only the needed context
+Routing never grants permission to push, deploy, publish, delete user data,
+weaken security, spend money, use real credentials, or expand scope.
 
-The current coordinator is the Global Context Owner for project identity,
-stage, Git/Worktree baseline, task-relevant architecture, reusable evidence,
-and the smallest useful team. This summary never overrides real files, Git,
-tests, or Thread state.
+## 2. Work-first routing
 
-Before assigning a specialist, read
-[references/context-delegation.md](references/context-delegation.md). Send one
-versioned Delegation Packet with Packet ID, Baseline SHA, scope, interfaces,
-direct dependencies, constraints, acceptance, tests, evidence, and compact
-return contract. When module governance applies, extend this same Packet with
-its canonical module fields; never create a parallel context document.
+Do not begin with roles or a numeric complexity band.
 
-Developer and QA start at Read Scope 1. Scope 0 is planning/triage only. Widen
-only on evidence and record the Scope Escalation. After the first Packet, repair
-loops use Context Delta with previous/new exact SHAs instead of resending full
-chat, project history, or unchanged constraints.
+Read:
+1. [references/workstream-routing.md](references/workstream-routing.md)
+2. [references/dependency-planning.md](references/dependency-planning.md)
 
-Reuse reliable evidence, but never replace independent QA, Security, Git
-containment, regression, permission, or safety validation. Context efficiency
-is subordinate to correctness.
+Then answer, in this order:
 
-## Execute with lifecycle and QA gates
+1. What observable deliverables are required?
+2. Which deliverables depend on which others?
+3. Can one owner safely finish the complete vertical slice?
+4. Would a second coding lane have a distinct deliverable and disjoint write
+   authority?
+5. Is the dependency/contract stable enough for parallel work?
+6. Does parallel execution materially repay coordination/integration cost?
+7. Which risk gates are independently justified?
 
-Architect, Research, QA, Security, and Reviewer are Policy-Enforced Read Only.
-Use `scripts/ReadOnly-Guard.ps1` in a quiescent exact checkout. A clean comparison
-is `READ_ONLY_CONFIRMED`; a change is `READ_ONLY_STATE_CHANGED` and fails closed,
-but does not prove which concurrent actor caused it.
+### Hard extra-agent rule
 
-Create a new Worktree only when two or more coding Agents truly need parallel,
-disjoint edits with material time benefit. The default per-project Worktree
-Budget is three retained Router-managed paths, including adopted paths. Reuse a
-safe checkout, reasonable existing Branch, or idle Worktree first; at the cap,
-wait or serialize. Never delete unknown Git objects to make room.
+Every additional Agent must own an independent, describable, independently
+checkable deliverable.
 
-QA verifies the exact writer SHA and cannot repair developer code then pass it.
-FAIL returns to the owning developer, which produces a new SHA; QA rechecks it.
-For medium/high risk, QA separates Feature and Regression evidence. Integrate
-only exact-SHA QA PASS work plus any required architecture consistency PASS,
-then run post-integration regression.
+If no such deliverable exists, do not create that Agent.
 
-Before Router upgrade/adoption, project mode change, or integration-owner
-handoff, read [references/migration-integration.md](references/migration-integration.md).
-Preserve in-flight Developer/QA assignments until a safe checkpoint. The
-Coordinator is the default Integration Owner unless an explicit evidence-backed
-owner is recorded.
+A module, file count, framework, or job title is not a deliverable.
 
-The complete cleanup, containment, archive, stale recovery, Branch protection,
-and rollback gates remain in
-[references/thread-lifecycle.md](references/thread-lifecycle.md). Never use
-dangerous reset/clean, push, deploy, publish, or destructive cleanup without
-separate authorization.
+## 3. Route decisions
 
-## Evidence-backed close
+Use one of:
 
-Use compact waits and avoid narrating unchanged polling. Final reporting covers:
+- `LOCAL` — current task owns implementation; no extra visible task.
+- `SERIAL_1` — one task-scoped Workstream is useful; no parallel coding lane.
+- `PARALLEL_2` — exactly two independent coding Workstreams.
+- `PARALLEL_3` — exactly three independent coding Workstreams.
+- `PLAN_FIRST` — a contract/architecture decision must be frozen before coding.
+- `BLOCKED` — safety, dependency, authorization, or router exclusivity is not
+  satisfied.
 
-- visible task titles/IDs and reused, adopted, or created state;
-- separate Thread, Worktree, Branch, commit, Registry, and Budget evidence;
-- module mode, primary/affected modules, owner/lease, existing capability and
-  duplicate guard decisions;
-- specialist initial scopes, justified escalations, reused evidence, and every
-  duplicate full scan with its reason;
-- QA failure/rework/new SHA/PASS, required architecture check, integration, and
-  regression;
-- Thread delivery health, retry/replacement, channel availability, and any
-  Receipt/reconciliation/ACK state plus any explicitly labeled Coordinator
-  fallback;
-- verified facts, unresolved risk, and unverified items.
+Default to `LOCAL` or `SERIAL_1`.
 
-Read [references/acceptance-tests.md](references/acceptance-tests.md) when
-changing or validating this Skill.
+`PARALLEL_2` and `PARALLEL_3` are logical plans. If the current platform has no
+safe parallel backend, preserve the Workstream boundaries and execute them with
+`SERIALIZED_FALLBACK` or `SERIALIZED_WAVES`. Parallel execution is an
+optimization, not a correctness prerequisite. Block only when the requested
+correctness evidence itself requires real concurrency.
 
-## Fixed V1.3.3 boundary
+The default maximum number of simultaneous coding Workstreams is **3**.
+Do not increase it because the UI can display more windows.
 
-Keep routing independent from model and reasoning selection. Do not override
-model/thinking, learn role recommendations, control model/API spending, promise
-a Token-saving percentage, build a dashboard/cloud service, alter permissions,
-or weaken correctness gates. Do not automatically write module metadata,
-refactor a real project, enable Active governance globally, or delete Legacy
-code. The Worktree Budget is a local lifecycle cap only.
+## 3A. Execution backend selection
+
+Read [references/execution-backends.md](references/execution-backends.md) after
+logical routing and before dispatch.
+
+Execution backends are independent from logical routes:
+
+- `CURRENT_THREAD` — default; owns LOCAL and safe serial execution.
+- `COLLAB_SUBAGENT` — only when the exposed capability has independent value.
+  Current collaboration Agents share the same working tree, so coding
+  parallelism is forbidden; bounded Research, Reviewer, or read-only analysis
+  may still be considered.
+- `MANUAL_VISIBLE_WORKTREE` — optional user-assisted backend. Use only when the
+  user explicitly asks for multiple visible Codex tasks. Return
+  `READY_FOR_MANUAL_VISIBLE_DISPATCH`, then adopt only a real Thread whose
+  repository containment passes.
+- `AUTO_VISIBLE_WORKTREE` — `UNSUPPORTED` with reason
+  `THREAD_CREATION_PLATFORM_LIMITATION`. Do not call automatic app-native
+  Thread creation for repo-bound coding Workstreams.
+
+Selection order is `CURRENT_THREAD`, capability-safe `COLLAB_SUBAGENT`,
+user-requested `MANUAL_VISIBLE_WORKTREE`, then `AUTO_VISIBLE_WORKTREE` (currently
+disabled). Never create extra context for visual effect.
+
+## 4. Batch snapshot
+
+Before delegating any coding Workstream, establish one compact batch snapshot:
+
+```yaml
+batch_id:
+project_key:
+project_root:
+objective:
+baseline_sha:
+branch:
+worktree:
+milestone:
+known_constraints:
+relevant_contracts:
+existing_capability_evidence:
+```
+
+This snapshot is a bounded index, not a replacement for real files/Git/tests.
+
+Do not resend the complete project history to each Workstream.
+
+### Project identity gate
+
+Read [references/project-identity.md](references/project-identity.md) before
+opening a Batch.
+
+Resolve identity in this order:
+
+1. app-native Project ID -> `id:<projectId>`;
+2. canonical Git root + exact HEAD -> `git:<canonical-git-root>`;
+3. unambiguous canonical local path -> `path:<canonical-path>`.
+
+`thread.projectId` is preferred evidence, not a hard requirement. A local Git
+repository remains valid without a Project ID or remote. Return
+`PROJECT_IDENTITY_BLOCKED` only when all three identity sources are unavailable
+or ambiguous. Never identify a project from its display title alone.
+
+### Repository / Worktree containment gate
+
+Project identity is not Thread checkout identity. Before adopting a manually
+created visible Coordinator or Workstream, read
+[references/repository-containment.md](references/repository-containment.md)
+and run `scripts/Resolve-RepositoryContainment.ps1` against its real cwd.
+
+Do not require `Thread cwd == CanonicalGitRoot`. A related Git Worktree at a
+different path is legal only when canonical `git-common-dir`, canonical
+worktree inventory or equivalent app evidence, starting lineage, and dirty
+attribution all pass. Similar names, equal remote, or equal HEAD are not proof.
+
+## 5. Task-scoped Threads and current-task Workstreams
+
+Read [references/thread-lifecycle.md](references/thread-lifecycle.md).
+
+The primary identity key is:
+
+```text
+project_key + batch_id + workstream_id
+```
+
+Do not discover/reuse Threads by permanent role such as `Developer`, `QA`,
+`Architect`, or `Security`.
+
+Reuse a Thread only for the same batch/workstream or its bounded repair /
+delivery recovery.
+
+A new milestone or unrelated batch defaults to a fresh Workstream Thread.
+
+`CURRENT_THREAD` may execute several Workstreams serially. Logical identity
+still remains `project_key + batch_id + workstream_id`; switch with one bounded
+Workstream Packet and compact checkpoint, and never mix simultaneous ownership
+scopes in one step.
+
+## 6. Context delegation
+
+Before assigning a Workstream, read
+[references/context-delegation.md](references/context-delegation.md).
+
+Send one Workstream Packet containing only:
+- objective;
+- baseline;
+- owned paths/scope;
+- starting evidence;
+- relevant contracts;
+- dependencies;
+- constraints;
+- acceptance;
+- tests;
+- risk flags;
+- compact return contract.
+
+Developer-like coding owners start at Read Scope 1 and widen only on evidence.
+
+After the first Packet, repairs use Context Delta rather than repeated project
+narrative.
+
+## 7. Capability, not permanent role
+
+Use capability labels only to describe what the Workstream needs, for example:
+
+- Fullstack
+- AI
+- Voice
+- Windows
+- Database
+- DevOps
+- Architect
+- QA
+- Security
+- Reviewer
+- Research
+
+Capability labels do not create a Thread by themselves.
+
+One owner may cover several capabilities when one vertical slice is safer and
+cheaper to understand as a whole.
+
+## 8. Risk-based gates
+
+Read [references/risk-gates.md](references/risk-gates.md).
+
+Architect, QA, Security, Reviewer, and Research are **gates/capabilities**, not
+permanent companions.
+
+Do not add independent QA merely because a change:
+- touches several files;
+- crosses UI/Core layers;
+- is called a Feature;
+- would have been V1 Level 2.
+
+Prefer owner verification for low/medium-risk bounded work.
+
+Prefer one post-integration independent QA for multiple low/medium-risk lanes
+rather than QA after every lane.
+
+Independent QA remains required when risk evidence justifies it.
+
+QA never repairs writer code and then passes its own repair.
+
+## 9. Git and write safety
+
+Before any real CANARY/ACTIVE coding delegation, read
+[references/git-worktree-safety.md](references/git-worktree-safety.md).
+
+Hard rules:
+- one active writer per owned file/scope;
+- parallel writers require disjoint write ownership;
+- unresolved ownership overlap serializes;
+- a new Worktree is justified only for genuine parallel coding;
+- the current tool surface does not authorize automatic visible Worktree
+  creation;
+- one coding lane normally stays in/reuses one safe checkout;
+- default V2 Router-managed Worktree Budget is 3;
+- read-only gates do not receive a new coding Worktree by default;
+- never delete unknown/adopted/user Git objects to manufacture capacity.
+
+## 10. Integration
+
+The current Batch Coordinator is the default Integration Owner.
+
+Integration is a distinct phase only when multiple Workstream outputs or SHAs
+must be combined.
+
+Before integration:
+- verify each exact SHA;
+- verify write ownership did not overlap unexpectedly;
+- verify dependency contracts still match;
+- fail closed on ambiguous lineage.
+
+Then:
+- integrate;
+- run targeted integration checks;
+- apply risk-based QA/Security gates;
+- run proportionate regression.
+
+Do not create a second Integration Agent unless it has a distinct necessary
+deliverable that the current Coordinator cannot safely own.
+
+## 11. Delivery reliability
+
+Read [references/delivery-reliability.md](references/delivery-reliability.md)
+after every terminal visible Workstream.
+
+Keep work completion separate from result delivery.
+
+Use compact Receipt -> reconciliation -> ACK. A delivery retry may redeliver the
+already-generated compact result once; it must not rerun implementation, tests,
+network calls, or real Provider requests.
+
+## 12. Existing capability guard
+
+For an existing project, perform one bounded Existing Capability Check when the
+request might duplicate functionality.
+
+Start from likely owners/callers/contracts/tests. Reuse that evidence through
+all Workstream Packets.
+
+Do not order every lane to independently rediscover whether the same capability
+already exists.
+
+A duplicate file name or class name is not proof of duplicate behavior.
+
+## 13. Shadow/A-B telemetry
+
+Read [references/telemetry-ab.md](references/telemetry-ab.md).
+
+Never estimate Token savings from file count or Thread count.
+
+Record model/token/credit usage only when Codex exposes authoritative usage for
+the measured run; otherwise record `Unknown`.
+
+Structural metrics may include:
+- model contexts / visible Threads started;
+- repository-wide reads;
+- read-scope escalations;
+- test/build runs;
+- QA cycles;
+- repair loops;
+- integration passes;
+- wall-clock duration;
+- user-visible defects.
+
+## 14. V1 coexistence and migration
+
+Read [references/migration-v1.md](references/migration-v1.md).
+
+V1.3.3 remains the exact Git/GitHub rollback baseline; after V2 promotion it is no longer a co-running production router.
+
+Do not reinterpret V1 permanent-role registry entries as V2 Workstream identity. Archive V1 registry state before initializing V2 state.
+
+A real V2 Canary must have a single active router. V1 may be temporarily
+disabled for that bounded Canary, but not deleted. Rollback is re-enable V1 and
+return V2 to SHADOW/DISABLED.
+
+## 15. Evidence-backed close
+
+Return a compact summary:
+
+```yaml
+v2_result:
+  mode:
+  logical_route: LOCAL | SERIAL_1 | PARALLEL_2 | PARALLEL_3 | PLAN_FIRST | BLOCKED
+  execution_backend: CURRENT_THREAD | COLLAB_SUBAGENT | MANUAL_VISIBLE_WORKTREE | AUTO_VISIBLE_WORKTREE | NONE
+  execution_mode: DIRECT | SERIAL | PARALLEL | SERIALIZED_FALLBACK | SERIALIZED_WAVES | READY_FOR_MANUAL_VISIBLE_DISPATCH | PLAN_FIRST | BLOCKED
+  batch_id:
+  workstreams:
+  dependencies:
+  write_ownership:
+  risk_gates:
+  threads_created:
+  worktrees_created:
+  exact_shas:
+  tests:
+  integration:
+  telemetry:
+  unresolved_risks:
+```
+
+Do not output hidden chain-of-thought. Give decisions and evidence only.
+
+## 16. Fixed V2 boundary
+
+V2 does not:
+- promise a Token-saving percentage;
+- automatically select a cheaper model;
+- weaken security to save usage;
+- auto-push/deploy/publish;
+- use real credentials without separate authorization;
+- erase the V1 rollback baseline;
+- silently reinterpret V1 role-thread registry entries as V2 workstreams;
+- auto-enable itself globally;
+- run two active routers for one task;
+- create visible windows merely for appearance;
+- call `AUTO_VISIBLE_WORKTREE` while the capability matrix marks it
+  `UNSUPPORTED`;
+- block an ordinary Feature only because a parallel/visible backend is
+  unavailable;
+- turn every module into a Workstream.
+
+Read [references/acceptance-tests.md](references/acceptance-tests.md) before
+modifying or promoting this Skill.

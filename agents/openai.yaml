@@ -1,6 +1,6 @@
 interface:
-  display_name: "自动可视化团队路由器"
-  short_description: "复用现有模块与角色，防止重复开发并组建最小可见工程团队"
-  default_prompt: "使用 $auto-visible-team-router 先查现有模块和能力，再安排最小必要的可见工程团队。"
+  display_name: "自动可视化工作流路由器"
+  short_description: "按交付物和风险规划工作流，并适配当前可用执行后端"
+  default_prompt: "使用 $auto-visible-team-router 先确定 Logical Route，再按平台能力选择 CURRENT_THREAD、受限 COLLAB_SUBAGENT 或用户协助的 MANUAL_VISIBLE_WORKTREE；无安全并行后端时串行降级，不自动创建可见 Worktree。"
 policy:
   allow_implicit_invocation: true
