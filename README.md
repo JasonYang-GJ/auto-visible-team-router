@@ -1,22 +1,46 @@
 # Auto Visible Team Router
 
-Workstream-based engineering routing for Codex.
+> **一句话：让 Codex 按任务的真实需要决定“当前任务直接做、串行做，还是拆成多个 Workstream 并行做”，并用最少必要的 Agent、Thread 和 Worktree 安全完成软件工程任务。**
+>
+> **In one sentence:** A Codex engineering router that decides whether work
+> should stay local, run serially, or split into genuinely independent
+> Workstreams—without creating extra Agents, Threads, or Worktrees just for
+> appearance.
 
 - **Version:** 2.0.0
 - **Default mode after installation:** SHADOW
 - **Canonical Skill name:** `auto-visible-team-router`
 
-V2 routes work by observable deliverables, dependencies, write ownership,
-parallel benefit, and evidence-triggered risk gates. It replaces V1.3.3's
-long-lived project-role Thread model while retaining exact-SHA verification,
-bounded context, one writer per scope, Worktree safety, and non-destructive Git
-rules.
+## 它是做什么的 / What it does
 
-V2 is platform-adaptive: it decides the logical Workstream route first, then
-selects an execution backend. A logical parallel route may safely run as a
-serialized fallback when the platform cannot prove isolated parallel coding.
+它不是“任务一复杂就自动拉一群 Agent”的工具。它先把工程任务整理成
+**Workstream（可独立交付、可验收、有明确负责人与写入范围的工作单元）**，
+再根据依赖关系、文件写入冲突、并行收益和风险选择执行方式：
 
-## What changes in V2
+- 小而明确的任务：留在当前 Codex 任务中完成（`LOCAL`）。
+- 需要拆分但不值得并行：按依赖顺序串行完成（`SERIAL_1`）。
+- 确实存在两个或三个独立交付物：规划为 `PARALLEL_2` / `PARALLEL_3`。
+- 多人会修改同一范围、依赖尚未确定或授权不足：串行化、先规划或阻止执行。
+- 涉及凭据、权限、安全边界或高风险变更：按证据启用 QA / Security 等独立门禁。
+
+V2 separates the **logical route** from the **execution backend**. A parallel
+plan runs concurrently only when the platform can prove isolated write
+ownership and checkout containment. Otherwise it safely falls back to serial
+execution instead of pretending that extra windows equal real parallel work.
+
+The result is a small, task-scoped engineering team when one is genuinely
+useful—and no extra team when the current Codex task can safely finish the job.
+
+## 核心原则 / Core promise
+
+- Fewer unnecessary model contexts, not a promised Token-saving percentage.
+- One active writer per file or overlapping scope.
+- Exact-SHA verification, bounded context, and evidence-backed acceptance.
+- No automatic push, deploy, publish, credential use, or destructive cleanup.
+- Visible Threads and Worktrees are used only when their real identity and
+  repository containment can be proven.
+
+## V2 如何路由 / How V2 routes work
 
 ```text
 Requirement
